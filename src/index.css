@@ -3,17 +3,21 @@
 @theme {
   --font-syncopate: "Syncopate", sans-serif;
   --font-jetbrains: "JetBrains Mono", monospace;
-  --color-bg: #070806;
-  --color-silver: #e4e6e1;
-  --color-accent: #ff5a1f;
-  --color-: #6ba642;
+  --color-bg: #0E0E0E;
+  --color-bg-elevated: #171715;
+  --color-silver: #ECEAE3;
+  --color-accent: #D9622B;
+  --color-line: #2A2A28;
 }
 
 :root {
-  --bg: #070806;
-  --silver: #e4e6e1;
-  --accent: #ff5a1f;
-  --: #6ba642;
+  --bg: #0E0E0E;
+  --bg-elevated: #171715;
+  --text-primary: #ECEAE3;
+  --silver: #ECEAE3;
+  --text-muted: #8B8A85;
+  --accent: #D9622B;
+  --line: #2A2A28;
   --grain-opacity: 0.14;
 }
 

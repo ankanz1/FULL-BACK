@@ -1,13 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import logoFull from './assets/logo_full.png';
+import { gsap } from 'gsap';
 import logoMark from './assets/logo_mark.png';
-
-const IMAGE_ASSETS = [
-  'https://images.unsplash.com/photo-1459865264687-595d652de67e?auto=format&fit=crop&q=90&w=2600', // Backdrop
-  'https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&q=90&w=2000', // Layer 1
-  'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?auto=format&fit=crop&q=90&w=2000', // Layer 2
-  'https://images.unsplash.com/photo-1486286701208-1d58e9338013?auto=format&fit=crop&q=90&w=2000'  // Layer 3
-];
 
 interface Player {
   player_id: string;
@@ -37,18 +30,159 @@ interface Highlight {
   thumbnail_url: string;
 }
 
+// Custom 3D Low-Poly Vector Football and Stadium Wireframe Canvas component
+function LowPolyCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mouseRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    let width = (canvas.width = canvas.offsetWidth);
+    let height = (canvas.height = canvas.offsetHeight);
+
+    // Resize listener
+    const handleResize = () => {
+      if (!canvas) return;
+      width = canvas.width = canvas.offsetWidth;
+      height = canvas.height = canvas.offsetHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Track mouse move for cursor reaction
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseRef.current.targetX = ((e.clientX - rect.left) / width) * 2 - 1;
+      mouseRef.current.targetY = -(((e.clientY - rect.top) / height) * 2 - 1);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+
+    // Define 3D low-poly wireframe vertices (sphere/icosahedron for soccer ball)
+    const t = (1.0 + Math.sqrt(5.0)) / 2.0;
+    const baseVertices = [
+      [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
+      [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
+      [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]
+    ].map(v => {
+      const length = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+      return [v[0]/length, v[1]/length, v[2]/length];
+    });
+
+    const faces = [
+      [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
+      [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+      [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
+      [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
+    ];
+
+    let angleX = 0;
+    let angleY = 0;
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      // Smooth mouse interpolation
+      const mouse = mouseRef.current;
+      mouse.x += (mouse.targetX - mouse.x) * 0.1;
+      mouse.y += (mouse.targetY - mouse.y) * 0.1;
+
+      // Auto-rotation speed influenced by mouse hover
+      angleX += 0.005 + mouse.y * 0.02;
+      angleY += 0.008 + mouse.x * 0.02;
+
+      ctx.save();
+      ctx.translate(width / 2, height / 2);
+      
+      const scale = Math.min(width, height) * 0.35;
+      const projected: Array<[number, number, number]> = [];
+
+      // Rotate and project vertices
+      baseVertices.forEach(v => {
+        let x = v[0];
+        let y = v[1];
+        let z = v[2];
+
+        // Rotate Y
+        let cosY = Math.cos(angleY);
+        let sinY = Math.sin(angleY);
+        let x1 = x * cosY - z * sinY;
+        let z1 = x * sinY + z * cosY;
+
+        // Rotate X
+        let cosX = Math.cos(angleX);
+        let sinX = Math.sin(angleX);
+        let y2 = y * cosX - z1 * sinX;
+        let z2 = y * sinX + z1 * cosX;
+
+        // Perspective projection
+        const distance = 2.5;
+        const perspective = 1 / (distance - z2);
+        projected.push([x1 * scale * perspective, y2 * scale * perspective, z2]);
+      });
+
+      // Draw wireframe faces
+      ctx.strokeStyle = '#D9622B'; // Accent burnt orange
+      ctx.lineWidth = 1;
+      
+      faces.forEach(face => {
+        const p1 = projected[face[0]];
+        const p2 = projected[face[1]];
+        const p3 = projected[face[2]];
+
+        // Simple backface culling (only draw faces pointing forward)
+        const v1x = p2[0] - p1[0];
+        const v1y = p2[1] - p1[1];
+        const v2x = p3[0] - p1[0];
+        const v2y = p3[1] - p1[1];
+        const normalZ = v1x * v2y - v1y * v2x;
+
+        if (normalZ > 0) {
+          ctx.beginPath();
+          ctx.moveTo(p1[0], p1[1]);
+          ctx.lineTo(p2[0], p2[1]);
+          ctx.lineTo(p3[0], p3[1]);
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(23, 23, 21, 0.4)';
+          ctx.fill();
+          ctx.stroke();
+        }
+      });
+
+      // Draw telemetry coordinate markers around the grid bounds
+      ctx.restore();
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('mousemove', handleMouseMove);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} className="w-full h-full block bg-transparent" />;
+}
+
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [entered, setEntered] = useState(false);
-  const [activeTab, setActiveTab] = useState<'fixtures' | 'clustering' | 'analytics' | 'highlights' | 'chat'>('fixtures');
+  
+  // Custom router state
+  const [currentPath, setCurrentPath] = useState('/'); // '/' | '/dashboard' | '/analyst' | '/players' | '/highlights' | '/developers'
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Parallax refs
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const layer1Ref = useRef<HTMLDivElement>(null);
-  const layer2Ref = useRef<HTMLDivElement>(null);
-  const layer3Ref = useRef<HTMLDivElement>(null);
+  // Layout refs for GSAP animations
+  const pageContainerRef = useRef<HTMLDivElement>(null);
+  const transitionSweepRef = useRef<HTMLDivElement>(null);
+  const canvas3dRef = useRef<HTMLDivElement>(null);
 
   // Data states
   const [players, setPlayers] = useState<Player[]>([]);
@@ -76,7 +210,7 @@ export default function App() {
   const [receipts, setReceipts] = useState<Record<string, { amount: string; tx: string }>>({});
 
   // Chat states
-  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'assistant' | 'system'; text: string; data?: any; paywall?: any }>>([
+  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'assistant' | 'system'; text: string }>>([
     { sender: 'assistant', text: "HELLO. I AM FULL BACK. STANDING BY FOR MATCH DATA OR TACTICAL ANALYSIS INTERROGATIONS. HOW CAN I BACK YOU TODAY?" }
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -95,7 +229,11 @@ export default function App() {
         loadedCount++;
         setProgress(Math.round((loadedCount / IMAGE_ASSETS.length) * 100));
         if (loadedCount === IMAGE_ASSETS.length) {
-          setTimeout(() => setLoading(false), 600);
+          setTimeout(() => {
+            setLoading(false);
+            // Trigger initial entrance animations
+            triggerEntranceAnims();
+          }, 600);
         }
       };
       img.onerror = () => {
@@ -111,48 +249,45 @@ export default function App() {
     fetchPlayers();
   }, []);
 
-  // Parallax interaction and entrance animations
-  useEffect(() => {
-    if (loading || error || entered) return;
+  // GSAP Entrance Animations
+  const triggerEntranceAnims = () => {
+    // 3D Canvas fade in
+    gsap.fromTo('#stadium-backdrop', 
+      { opacity: 0, scale: 0.9 }, 
+      { opacity: 1, scale: 1, duration: 2, ease: 'power3.out' }
+    );
+    // Micro headlines wipe on
+    gsap.fromTo('.hero-title', 
+      { clipPath: 'polygon(0 0, 0 0, 0 100%, 0% 100%)' },
+      { clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)', duration: 1.5, ease: 'power4.inOut', delay: 0.5 }
+    );
+  };
 
-    const canvas = canvasRef.current;
-    const layer1 = layer1Ref.current;
-    const layer2 = layer2Ref.current;
-    const layer3 = layer3Ref.current;
+  // Route transition sweep logic
+  const handleNavigate = (path: string) => {
+    if (path === currentPath || isTransitioning) return;
+    setIsTransitioning(true);
 
-    if (!canvas || !layer1 || !layer2 || !layer3) return;
+    const sweep = transitionSweepRef.current;
+    if (!sweep) {
+      setCurrentPath(path);
+      setIsTransitioning(false);
+      return;
+    }
 
-    canvas.style.opacity = '0';
-    canvas.style.transform = 'rotateX(90deg) rotateZ(0deg) scale(0.8)';
+    // GSAP diagonal orange sweep wipe
+    const tl = gsap.timeline({
+      onComplete: () => {
+        setCurrentPath(path);
+        setIsTransitioning(false);
+        // Wipe sweep out
+        gsap.to(sweep, { xPercent: 100, skewX: 0, duration: 0.6, ease: 'power3.in' });
+      }
+    });
 
-    const entryTimeout = setTimeout(() => {
-      canvas.style.transition = 'all 2.5s cubic-bezier(0.16, 1, 0.3, 1)';
-      canvas.style.opacity = '1';
-      canvas.style.transform = 'rotateX(55deg) rotateZ(-25deg) scale(1)';
-    }, 100);
-
-    const transitionTimeout = setTimeout(() => {
-      canvas.style.transition = 'transform 0.8s cubic-bezier(0.16, 1, 0.3, 1)';
-    }, 2600);
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const x = (window.innerWidth / 2 - e.pageX) / 25;
-      const y = (window.innerHeight / 2 - e.pageY) / 25;
-
-      canvas.style.transform = `rotateX(${55 + y / 2}deg) rotateZ(${-25 + x / 2}deg)`;
-      layer1.style.transform = `translateZ(15px) translate(${x * 0.2}px, ${y * 0.2}px)`;
-      layer2.style.transform = `translateZ(30px) translate(${x * 0.4}px, ${y * 0.4}px)`;
-      layer3.style.transform = `translateZ(45px) translate(${x * 0.6}px, ${y * 0.6}px)`;
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-
-    return () => {
-      clearTimeout(entryTimeout);
-      clearTimeout(transitionTimeout);
-      window.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [loading, error, entered]);
+    tl.set(sweep, { xPercent: -100, skewX: -20 })
+      .to(sweep, { xPercent: 0, skewX: 0, duration: 0.6, ease: 'power3.out' });
+  };
 
   // Fetch players list
   const fetchPlayers = async () => {
@@ -169,7 +304,6 @@ export default function App() {
 
   // Custom fetch function that handles 402 Payment Required
   const authenticatedFetch = async (url: string, path: string): Promise<any> => {
-    // If resource is already unlocked in this session, attach the saved signature
     const savedSig = unlockedResources[path] ? receipts[path]?.tx : null;
     const headers: Record<string, string> = {};
     if (savedSig) {
@@ -197,14 +331,12 @@ export default function App() {
         throw new Error('Invalid payment requirements structure');
       }
 
-      // Trigger paywall UI modal and await signature
       return new Promise((resolve, reject) => {
         setPaywallRequired({
           resource: path,
           amount: accepts.maxAmountRequired,
           description: accepts.description,
           resolve: async (signature: string) => {
-            // Retry request with signature
             try {
               const retryPayload = {
                 x402Version: 1,
@@ -222,7 +354,6 @@ export default function App() {
                 reject(new Error(`Failed on retry: ${text}`));
               } else {
                 const data = await retryRes.json();
-                // Store unlocked state
                 setUnlockedResources(prev => ({ ...prev, [path]: true }));
                 setReceipts(prev => ({ ...prev, [path]: { amount: accepts.maxAmountRequired, tx: signature } }));
                 resolve(data);
@@ -320,17 +451,17 @@ export default function App() {
     }
   };
 
-  // Trigger loading when tab changes
+  // Hook datasets based on page loading
   useEffect(() => {
-    if (activeTab === 'clustering' && selectedPlayer) {
+    if (currentPath === '/players' && selectedPlayer) {
       fetchClustering(selectedPlayer);
-    } else if (activeTab === 'analytics' && selectedMatchId) {
+    } else if (currentPath === '/analyst' && selectedMatchId) {
       fetchPrediction(selectedMatchId);
       fetchTacticalBreakdown(selectedMatchId);
-    } else if (activeTab === 'highlights' && selectedMatchId) {
+    } else if (currentPath === '/highlights' && selectedMatchId) {
       fetchHighlights(selectedMatchId);
     }
-  }, [activeTab, selectedPlayer, selectedMatchId]);
+  }, [currentPath, selectedPlayer, selectedMatchId]);
 
   // Handle chat submission
   const handleChatSubmit = async (e: React.FormEvent) => {
@@ -343,7 +474,6 @@ export default function App() {
     setChatLoading(true);
 
     try {
-      // Simulate real-time MCP tool call orchestration
       const cleanText = userText.toLowerCase();
       let reply = '';
       let isPremiumTool = false;
@@ -380,10 +510,9 @@ export default function App() {
       }
 
       if (isPremiumTool) {
-        // Render tool invocation log
         setMessages(prev => [...prev, {
           sender: 'system',
-          text: `INVOKING_MCP_TOOL: fullback-mcp-server :: ${toolName}()\nSTATUS: 402 PAYMENT REQUIRED (${parseFloat(amount)/1000000} USDC required on Base Sepolia) :: ${desc}`
+          text: `INVOKING_MCP_TOOL: fullback-mcp-server :: ${toolName}()\nSTATUS: 402 PAYMENT REQUIRED (${parseFloat(amount)/1000000} USDC required) :: ${desc}`
         }]);
 
         try {
@@ -410,7 +539,6 @@ export default function App() {
           setMessages(prev => [...prev, { sender: 'system', text: `MCP_TOOL_EXECUTION :: FAILED\nReason: ${err.message}` }]);
         }
       } else {
-        // Free basic answers
         if (cleanText.includes('hello') || cleanText.includes('hi')) {
           reply = "HELLO. STANDING BY FOR World Cup telemetry analysis. Ask about player clustering, outcome predictions, or post-match breakdowns.";
         } else if (cleanText.includes('match') || cleanText.includes('fixture') || cleanText.includes('score')) {
@@ -431,15 +559,15 @@ export default function App() {
     }
   };
 
-  // Loading Screen
+  // Loading Screen State
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen w-screen bg-[#070806] text-[#e4e6e1] font-syncopate select-none">
+      <div className="flex flex-col items-center justify-center h-screen w-screen bg-[#0E0E0E] text-[#ECEAE3] font-syncopate select-none">
         <div className="text-center space-y-6 max-w-xs md:max-w-sm px-6 flex flex-col items-center">
           <img src={logoMark} alt="FULL BACK Logo Mark" className="w-16 h-16 md:w-20 md:h-20 animate-pulse object-contain mb-2" />
           <div className="h-[2px] w-full bg-neutral-900 overflow-hidden relative">
             <div
-              className="h-full bg-[#ff5a1f] transition-all duration-300 ease-out"
+              className="h-full bg-[#D9622B] transition-all duration-300 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -452,10 +580,10 @@ export default function App() {
     );
   }
 
-  // Connection Error
+  // Connection Error State
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen w-screen bg-[#070806] text-[#e4e6e1] font-syncopate select-none px-6 text-center">
+      <div className="flex flex-col items-center justify-center h-screen w-screen bg-[#0E0E0E] text-[#ECEAE3] font-syncopate select-none px-6 text-center">
         <div className="max-w-md p-8 border border-red-500/20 bg-black/40 backdrop-blur-md rounded">
           <div className="text-red-500 text-[1.2rem] md:text-[1.5rem] tracking-wider mb-4">▲ CONNECTION ERROR</div>
           <p className="mono text-[0.75rem] opacity-75 mb-6 leading-relaxed">
@@ -463,7 +591,7 @@ export default function App() {
           </p>
           <button
             onClick={() => window.location.reload()}
-            className="mono border border-[#e4e6e1] text-[#e4e6e1] px-4 py-2 hover:bg-[#ff5a1f] hover:border-[#ff5a1f] hover:text-white transition duration-300 tracking-wider text-[0.7rem]"
+            className="mono border border-[#ECEAE3] text-[#ECEAE3] px-4 py-2 hover:bg-[#D9622B] hover:border-[#D9622B] hover:text-white transition duration-300 tracking-wider text-[0.7rem]"
           >
             RETRY_CONNECTION
           </button>
@@ -472,920 +600,925 @@ export default function App() {
     );
   }
 
-  // Dashboard Page
-  if (entered) {
-    return (
-      <div className="flex h-screen w-screen bg-[#070806] text-[#e4e6e1] overflow-hidden relative font-jetbrains selection:bg-[#ff5a1f]/30">
-        
-        {/* Grain overlay */}
-        <div className="fixed inset-0 pointer-events-none opacity-5 mix-blend-overlay z-50 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noiseFilter\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.85\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noiseFilter)\'/%3E%3C/svg%3E")' }} />
-
-        {/* Ambient background glow */}
-        <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#ff5a1f]/3 blur-[120px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[600px] h-[600px] bg-green-500/2 blur-[150px] rounded-full pointer-events-none" />
-
-        {/* Sidebar Nav */}
-        <nav className="w-[18rem] shrink-0 border-r border-[#e4e6e1]/10 bg-black/55 backdrop-blur-md flex flex-col p-6 z-10">
-          <div className="flex items-center gap-3 mb-10">
-            <img src={logoMark} alt="Logo" className="w-8 h-8 object-contain" />
-            <span className="font-syncopate text-[0.8rem] tracking-widest font-bold">FULL BACK</span>
-          </div>
-
-          <div className="flex-1 space-y-2">
-            <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-3 px-2">FREE_TIER</div>
-            <button
-              onClick={() => setActiveTab('fixtures')}
-              className={`w-full flex items-center justify-between text-left px-4 py-3 rounded text-[0.75rem] tracking-wider transition ${activeTab === 'fixtures' ? 'bg-[#ff5a1f]/10 text-[#ff5a1f] border-l-2 border-[#ff5a1f] font-semibold' : 'text-neutral-400 hover:bg-neutral-900/50 hover:text-white'}`}
-            >
-              <span>FIXTURES & STANDINGS</span>
-              <span className="text-[0.55rem] px-1.5 py-0.5 rounded border border-neutral-700 bg-neutral-900 text-neutral-500">FREE</span>
-            </button>
-
-            <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold pt-6 mb-3 px-2">PREMIUM_ANALYTICS</div>
-            <button
-              onClick={() => setActiveTab('clustering')}
-              className={`w-full flex items-center justify-between text-left px-4 py-3 rounded text-[0.75rem] tracking-wider transition ${activeTab === 'clustering' ? 'bg-[#ff5a1f]/10 text-[#ff5a1f] border-l-2 border-[#ff5a1f] font-semibold' : 'text-neutral-400 hover:bg-neutral-900/50 hover:text-white'}`}
-            >
-              <span>PLAYER CLUSTERING</span>
-              <span className="text-[0.55rem] px-1.5 py-0.5 rounded border border-[#ff5a1f]/20 bg-[#ff5a1f]/5 text-[#ff5a1f] font-semibold">0.01$</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('analytics')}
-              className={`w-full flex items-center justify-between text-left px-4 py-3 rounded text-[0.75rem] tracking-wider transition ${activeTab === 'analytics' ? 'bg-[#ff5a1f]/10 text-[#ff5a1f] border-l-2 border-[#ff5a1f] font-semibold' : 'text-neutral-400 hover:bg-neutral-900/50 hover:text-white'}`}
-            >
-              <span>MATCH ANALYTICS</span>
-              <span className="text-[0.55rem] px-1.5 py-0.5 rounded border border-[#ff5a1f]/20 bg-[#ff5a1f]/5 text-[#ff5a1f] font-semibold">0.15$</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('highlights')}
-              className={`w-full flex items-center justify-between text-left px-4 py-3 rounded text-[0.75rem] tracking-wider transition ${activeTab === 'highlights' ? 'bg-[#ff5a1f]/10 text-[#ff5a1f] border-l-2 border-[#ff5a1f] font-semibold' : 'text-neutral-400 hover:bg-neutral-900/50 hover:text-white'}`}
-            >
-              <span>HIGHLIGHT DETECTOR</span>
-              <span className="text-[0.55rem] px-1.5 py-0.5 rounded border border-[#ff5a1f]/20 bg-[#ff5a1f]/5 text-[#ff5a1f] font-semibold">0.08$</span>
-            </button>
-
-            <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold pt-6 mb-3 px-2">AGENT_HUDS</div>
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`w-full flex items-center justify-between text-left px-4 py-3 rounded text-[0.75rem] tracking-wider transition ${activeTab === 'chat' ? 'bg-[#ff5a1f]/10 text-[#ff5a1f] border-l-2 border-[#ff5a1f] font-semibold' : 'text-neutral-400 hover:bg-neutral-900/50 hover:text-white'}`}
-            >
-              <span>CHAT ANALYST</span>
-              <span className="text-[0.55rem] px-1.5 py-0.5 rounded border border-neutral-700 bg-neutral-900 text-neutral-500">MIXED</span>
-            </button>
-          </div>
-
-          {/* Connection status footer */}
-          <div className="border-t border-[#e4e6e1]/10 pt-4 mt-auto">
-            <div className="flex items-center justify-between text-[0.6rem] text-neutral-500 tracking-wider">
-              <span>TELEMETRY_LINK</span>
-              <span className="flex items-center gap-1.5 text-green-500">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                ONLINE
-              </span>
-            </div>
-            <div className="text-[0.55rem] text-neutral-600 mt-1">BASE_SEPOLIA_NODE: CONNECTED</div>
-          </div>
-        </nav>
-
-        {/* Main Content Pane */}
-        <main className="flex-1 flex flex-col min-w-0 z-10 relative bg-black/20">
-          
-          {/* Header Panel */}
-          <header className="h-[4.5rem] border-b border-[#e4e6e1]/10 px-8 flex items-center justify-between bg-black/40 backdrop-blur-sm">
-            <div className="flex items-center gap-6">
-              <span className="text-[0.8rem] font-bold tracking-widest font-syncopate">
-                {activeTab.toUpperCase()} STATUS
-              </span>
-              <div className="h-4 w-[1px] bg-neutral-800" />
-              <div className="mono text-[0.65rem] text-neutral-500 tracking-wider">
-                WORLD CUP 2026 // MATCH: {selectedMatchId}
-              </div>
-            </div>
-
-            {/* Match selector (for top bar) */}
-            <div className="flex items-center gap-2">
-              <span className="mono text-[0.6rem] text-neutral-500 uppercase tracking-widest mr-2">SELECT_MATCH:</span>
-              {['M001', 'M002', 'M003'].map(id => (
-                <button
-                  key={id}
-                  onClick={() => setSelectedMatchId(id)}
-                  className={`mono text-[0.65rem] px-2.5 py-1 rounded border transition ${selectedMatchId === id ? 'border-[#ff5a1f] text-[#ff5a1f] bg-[#ff5a1f]/5' : 'border-neutral-800 text-neutral-400 hover:border-neutral-700'}`}
-                >
-                  {id}
-                </button>
-              ))}
-            </div>
-          </header>
-
-          {/* Tab Pages */}
-          <div className="flex-1 overflow-y-auto p-8 max-w-6xl w-full mx-auto">
-            
-            {/* 1. Fixtures Tab */}
-            {activeTab === 'fixtures' && (
-              <div className="space-y-8 animate-fade-in">
-                
-                {/* Standings Cards */}
-                <div>
-                  <h3 className="mono text-[0.7rem] text-[#ff5a1f] tracking-widest uppercase mb-4">[ GROUP_STAGE_STANDINGS ]</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
-                    {/* Group A */}
-                    <div className="border border-[#e4e6e1]/10 bg-black/30 backdrop-blur-md rounded p-6">
-                      <div className="flex justify-between items-center mb-4 border-b border-[#e4e6e1]/5 pb-2">
-                        <span className="text-[0.75rem] font-bold tracking-widest font-syncopate">GROUP A</span>
-                        <span className="mono text-[0.6rem] text-neutral-500">STAGE_ROUND_1</span>
-                      </div>
-                      <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
-                        <thead>
-                          <tr className="text-neutral-500 border-b border-[#e4e6e1]/5">
-                            <th className="py-2">POS</th>
-                            <th className="py-2">TEAM</th>
-                            <th className="py-2 text-center">P</th>
-                            <th className="py-2 text-center">W-D-L</th>
-                            <th className="py-2 text-center">GD</th>
-                            <th className="py-2 text-right">PTS</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#e4e6e1]/5">
-                          <tr className="hover:bg-neutral-900/30">
-                            <td className="py-2 text-[#ff5a1f]">1</td>
-                            <td className="py-2 font-semibold">🇩🇪 GERMANY</td>
-                            <td className="py-2 text-center">1</td>
-                            <td className="py-2 text-center">1-0-0</td>
-                            <td className="py-2 text-center">+2</td>
-                            <td className="py-2 text-right text-white">3</td>
-                          </tr>
-                          <tr className="hover:bg-neutral-900/30">
-                            <td className="py-2 text-neutral-400">2</td>
-                            <td className="py-2 font-semibold">🇺🇸 UNITED STATES</td>
-                            <td className="py-2 text-center">1</td>
-                            <td className="py-2 text-center">1-0-0</td>
-                            <td className="py-2 text-center">+1</td>
-                            <td className="py-2 text-right text-white">3</td>
-                          </tr>
-                          <tr className="hover:bg-neutral-900/30">
-                            <td className="py-2 text-neutral-400">3</td>
-                            <td className="py-2 font-semibold">🇨🇴 COLOMBIA</td>
-                            <td className="py-2 text-center">1</td>
-                            <td className="py-2 text-center">0-0-1</td>
-                            <td className="py-2 text-center">-1</td>
-                            <td className="py-2 text-right text-white">0</td>
-                          </tr>
-                          <tr className="hover:bg-neutral-900/30">
-                            <td className="py-2 text-neutral-400">4</td>
-                            <td className="py-2 font-semibold">🇯🇵 JAPAN</td>
-                            <td className="py-2 text-center">1</td>
-                            <td className="py-2 text-center">0-0-1</td>
-                            <td className="py-2 text-center">-2</td>
-                            <td className="py-2 text-right text-white">0</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Group B */}
-                    <div className="border border-[#e4e6e1]/10 bg-black/30 backdrop-blur-md rounded p-6">
-                      <div className="flex justify-between items-center mb-4 border-b border-[#e4e6e1]/5 pb-2">
-                        <span className="text-[0.75rem] font-bold tracking-widest font-syncopate">GROUP B</span>
-                        <span className="mono text-[0.6rem] text-neutral-500">STAGE_ROUND_1</span>
-                      </div>
-                      <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
-                        <thead>
-                          <tr className="text-neutral-500 border-b border-[#e4e6e1]/5">
-                            <th className="py-2">POS</th>
-                            <th className="py-2">TEAM</th>
-                            <th className="py-2 text-center">P</th>
-                            <th className="py-2 text-center">W-D-L</th>
-                            <th className="py-2 text-center">GD</th>
-                            <th className="py-2 text-right">PTS</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#e4e6e1]/5">
-                          <tr className="hover:bg-neutral-900/30">
-                            <td className="py-2 text-[#ff5a1f]">1</td>
-                            <td className="py-2 font-semibold">🇫🇷 FRANCE</td>
-                            <td className="py-2 text-center">1</td>
-                            <td className="py-2 text-center">1-0-0</td>
-                            <td className="py-2 text-center">+1</td>
-                            <td className="py-2 text-right text-white">3</td>
-                          </tr>
-                          <tr className="hover:bg-neutral-900/30">
-                            <td className="py-2 text-neutral-400">2</td>
-                            <td className="py-2 font-semibold">🇦🇷 ARGENTINA</td>
-                            <td className="py-2 text-center">1</td>
-                            <td className="py-2 text-center">0-1-0</td>
-                            <td className="py-2 text-center">0</td>
-                            <td className="py-2 text-right text-white">1</td>
-                          </tr>
-                          <tr className="hover:bg-neutral-900/30">
-                            <td className="py-2 text-neutral-400">3</td>
-                            <td className="py-2 font-semibold">🏴󠁧󠁢󠁥󠁮󠁧󠁿 ENGLAND</td>
-                            <td className="py-2 text-center">1</td>
-                            <td className="py-2 text-center">0-1-0</td>
-                            <td className="py-2 text-center">0</td>
-                            <td className="py-2 text-right text-white">1</td>
-                          </tr>
-                          <tr className="hover:bg-neutral-900/30">
-                            <td className="py-2 text-neutral-400">4</td>
-                            <td className="py-2 font-semibold">🇲🇦 MOROCCO</td>
-                            <td className="py-2 text-center">1</td>
-                            <td className="py-2 text-center">0-0-1</td>
-                            <td className="py-2 text-center">-1</td>
-                            <td className="py-2 text-right text-white">0</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Fixture Schedule */}
-                <div>
-                  <h3 className="mono text-[0.7rem] text-[#ff5a1f] tracking-widest uppercase mb-4">[ FIXTURE_MATRIX ]</h3>
-                  <div className="space-y-4">
-                    
-                    {/* Match M001 */}
-                    <div className="border border-[#e4e6e1]/10 bg-black/20 hover:bg-neutral-900/10 transition p-6 rounded flex items-center justify-between">
-                      <div className="flex items-center gap-6">
-                        <span className="mono text-[0.75rem] text-[#ff5a1f] font-semibold">M001</span>
-                        <div>
-                          <div className="text-[0.8rem] font-semibold text-white">🇺🇸 USA vs 🇨🇴 COLOMBIA</div>
-                          <div className="mono text-[0.6rem] text-neutral-500 mt-1">GROUP A · NIGHT MATCH</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        <div className="mono text-[0.8rem] font-bold text-[#ff5a1f] border border-[#ff5a1f]/20 bg-[#ff5a1f]/5 px-3 py-1 rounded">
-                          2 - 1
-                        </div>
-                        <div className="mono text-right text-[0.65rem] text-neutral-500">
-                          <div>STATUS: FINISHED</div>
-                          <div>DATE: 2026-06-12</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Match M002 */}
-                    <div className="border border-[#e4e6e1]/10 bg-black/20 hover:bg-neutral-900/10 transition p-6 rounded flex items-center justify-between">
-                      <div className="flex items-center gap-6">
-                        <span className="mono text-[0.75rem] text-[#ff5a1f] font-semibold">M002</span>
-                        <div>
-                          <div className="text-[0.8rem] font-semibold text-white">🇩🇪 GERMANY vs 🇯🇵 JAPAN</div>
-                          <div className="mono text-[0.6rem] text-neutral-500 mt-1">GROUP A · NIGHT MATCH</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        <div className="mono text-[0.8rem] font-bold text-[#ff5a1f] border border-[#ff5a1f]/20 bg-[#ff5a1f]/5 px-3 py-1 rounded">
-                          3 - 1
-                        </div>
-                        <div className="mono text-right text-[0.65rem] text-neutral-500">
-                          <div>STATUS: FINISHED</div>
-                          <div>DATE: 2026-06-13</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Match M003 */}
-                    <div className="border border-[#e4e6e1]/10 bg-black/20 hover:bg-neutral-900/10 transition p-6 rounded flex items-center justify-between">
-                      <div className="flex items-center gap-6">
-                        <span className="mono text-[0.75rem] text-[#ff5a1f] font-semibold">M003</span>
-                        <div>
-                          <div className="text-[0.8rem] font-semibold text-white">🇦🇷 ARGENTINA vs 🏴󠁧󠁢󠁥󠁮󠁧󠁿 ENGLAND</div>
-                          <div className="mono text-[0.6rem] text-neutral-500 mt-1">GROUP B · NIGHT MATCH</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        <div className="mono text-[0.8rem] font-bold text-[#ff5a1f] border border-[#ff5a1f]/20 bg-[#ff5a1f]/5 px-3 py-1 rounded">
-                          2 - 2
-                        </div>
-                        <div className="mono text-right text-[0.65rem] text-neutral-500">
-                          <div>STATUS: FINISHED</div>
-                          <div>DATE: 2026-06-14</div>
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-            {/* 2. Player Clustering Tab */}
-            {activeTab === 'clustering' && (
-              <div className="space-y-8 animate-fade-in">
-                
-                {/* Info and selector */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  
-                  {/* Selector pane */}
-                  <div className="border border-[#e4e6e1]/10 bg-black/30 backdrop-blur-md rounded p-6 flex flex-col justify-between">
-                    <div>
-                      <h3 className="mono text-[0.7rem] text-[#ff5a1f] tracking-widest uppercase mb-4">[ TARGET_SELECTION ]</h3>
-                      <p className="mono text-[0.65rem] text-neutral-500 leading-relaxed mb-6">
-                        SELECT A TARGET PLAYER TO COMPILE K-MEANS NEAREST SIMILAR CLUSTERING FROM DATASET.
-                      </p>
-                      
-                      <div className="space-y-2">
-                        <label className="mono text-[0.6rem] text-neutral-400">PLAYER_NAME:</label>
-                        <select
-                          value={selectedPlayer}
-                          onChange={(e) => setSelectedPlayer(e.target.value)}
-                          className="w-full bg-[#070806] border border-[#e4e6e1]/20 rounded px-3 py-2 text-[0.75rem] text-white focus:outline-none focus:border-[#ff5a1f] font-jetbrains"
-                        >
-                          {players.length > 0 ? (
-                            players.slice(0, 30).map(p => (
-                              <option key={p.player_id} value={p.player_id}>
-                                {p.name} ({p.position})
-                              </option>
-                            ))
-                          ) : (
-                            <option>Loading players list...</option>
-                          )}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="pt-6 border-t border-[#e4e6e1]/5 mt-6">
-                      <div className="mono text-[0.6rem] text-neutral-500 flex justify-between">
-                        <span>MODEL_SILHOUETTE:</span>
-                        <span className="text-[#ff5a1f] font-semibold">0.226</span>
-                      </div>
-                      <div className="mono text-[0.6rem] text-neutral-500 flex justify-between mt-1.5">
-                        <span>FEATURES_DIM:</span>
-                        <span className="text-white">7 (Goals, Assists, Key Passes, Tackles...)</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Similarity Results Card */}
-                  <div className="lg:col-span-2 border border-[#e4e6e1]/10 bg-black/30 backdrop-blur-md rounded p-6 relative min-h-[300px] flex flex-col">
-                    
-                    {!playerClusterData ? (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center">
-                        <div className="w-10 h-10 border-2 border-t-[#ff5a1f] border-neutral-800 rounded-full animate-spin mb-4" />
-                        <span className="mono text-[0.65rem] text-neutral-500">REQUESTING CLUSTER TELEMETRY...</span>
-                      </div>
-                    ) : (
-                      <div className="space-y-6 flex-1 flex flex-col justify-between">
-                        <div>
-                          <div className="flex justify-between items-start border-b border-[#e4e6e1]/5 pb-3">
-                            <div>
-                              <h2 className="text-[1rem] font-bold text-white uppercase">{playerClusterData.player.name}</h2>
-                              <div className="mono text-[0.6rem] text-neutral-500 mt-1">
-                                NATIONALITY: {playerClusterData.player.nationality.toUpperCase()} · POSITION: {playerClusterData.player.position.toUpperCase()}
-                              </div>
-                            </div>
-                            
-                            {receipts[`/cluster/player/${selectedPlayer}`] && (
-                              <span className="mono text-[0.55rem] px-2 py-0.5 border border-[#ff5a1f]/30 bg-[#ff5a1f]/5 text-[#ff5a1f] rounded">
-                                SETTLED · 0.01 USDC · BASE
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                            <div>
-                              <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-2">ARCHETYPE_ALLOCATION</div>
-                              <div className="border border-[#ff5a1f]/20 bg-[#ff5a1f]/5 rounded p-3 text-[0.75rem] font-bold text-[#ff5a1f] tracking-wide">
-                                {playerClusterData.player.archetype.toUpperCase()}
-                              </div>
-                              <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed mt-2.5">
-                                Allocated dynamically via K-Means centroid placement based on per-90 metrics.
-                              </p>
-                            </div>
-
-                            <div>
-                              <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-2">NEAREST_NEIGHBOR_MATRICES</div>
-                              <div className="space-y-1.5">
-                                {playerClusterData.similar_players.slice(0, 3).map((p: any) => (
-                                  <div key={p.player_id} className="flex justify-between items-center text-[0.7rem] bg-neutral-900/40 border border-[#e4e6e1]/5 px-2.5 py-1.5 rounded">
-                                    <span className="font-semibold text-white">{p.name}</span>
-                                    <span className="mono text-[0.6rem] text-[#ff5a1f]">DIST: {p.similarity_distance.toFixed(3)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="border-t border-[#e4e6e1]/5 pt-4 flex justify-between items-center text-[0.65rem] mono text-neutral-500">
-                          <span>MARKET_VALUE: €{playerClusterData.player.market_value_m}M</span>
-                          <span>MINUTES_PLAYED: {playerClusterData.player.minutes_played}m</span>
-                          <span>GOALS_90: {((playerClusterData.player.goals / playerClusterData.player.minutes_played) * 90).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-
-                {/* 2D PCA Scatter plot */}
-                <div className="border border-[#e4e6e1]/10 bg-black/30 backdrop-blur-md rounded p-6">
-                  <h3 className="mono text-[0.7rem] text-[#ff5a1f] tracking-widest uppercase mb-4">[ PCA_PROJECTION_SCATTER ]</h3>
-                  <div className="relative aspect-[21/9] w-full border border-[#e4e6e1]/5 bg-[#070806]/40 rounded overflow-hidden flex items-center justify-center">
-                    
-                    {players.length === 0 ? (
-                      <span className="mono text-[0.65rem] text-neutral-500">LOADING PCA DIMENSION MAP...</span>
-                    ) : (
-                      <svg className="w-full h-full" viewBox="0 0 1000 400">
-                        {/* Grid lines */}
-                        <line x1="500" y1="0" x2="500" y2="400" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                        <line x1="0" y1="200" x2="1000" y2="200" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                        
-                        {/* Map players */}
-                        {players.map((p) => {
-                          const px = p.pca_x || 0;
-                          const py = p.pca_y || 0;
-                          
-                          // Transform data PCA x, y (which range roughly -3 to 4) to SVG coords (100 to 900, 50 to 350)
-                          const cx = 500 + px * 90;
-                          const cy = 200 - py * 90;
-                          
-                          const isSelected = p.player_id === selectedPlayer;
-                          const clusterColor = p.cluster === 0 ? '#ff5a1f' : p.cluster === 1 ? '#6ba642' : p.cluster === 2 ? '#3b82f6' : p.cluster === 3 ? '#a855f7' : '#eab308';
-                          
-                          return (
-                            <circle
-                              key={p.player_id}
-                              cx={cx}
-                              cy={cy}
-                              r={isSelected ? 6 : 2.5}
-                              fill={isSelected ? '#ff5a1f' : clusterColor}
-                              stroke={isSelected ? '#white' : 'transparent'}
-                              strokeWidth={2}
-                              className="cursor-pointer transition hover:r-5 opacity-75"
-                              onClick={() => {
-                                setSelectedPlayer(p.player_id);
-                              }}
-                            >
-                              <title>{p.name} ({p.archetype})</title>
-                            </circle>
-                          );
-                        })}
-
-                        {/* Selected target highlighted */}
-                        {(() => {
-                          const target = players.find(p => p.player_id === selectedPlayer);
-                          if (!target) return null;
-                          const cx = 500 + (target.pca_x || 0) * 90;
-                          const cy = 200 - (target.pca_y || 0) * 90;
-                          return (
-                            <g>
-                              <circle cx={cx} cy={cy} r={14} fill="none" stroke="#ff5a1f" strokeWidth="1.5" className="animate-pulse" />
-                              <text x={cx + 18} y={cy + 4} fill="white" className="mono text-[0.55rem] font-bold uppercase">{target.name}</text>
-                            </g>
-                          );
-                        })()}
-                      </svg>
-                    )}
-
-                    {/* Scatter Legend */}
-                    <div className="absolute bottom-4 left-4 flex flex-wrap gap-4 bg-black/80 border border-neutral-800 p-3 rounded">
-                      <div className="flex items-center gap-1.5 text-[0.6rem] mono">
-                        <span className="w-2 h-2 bg-[#ff5a1f] rounded-full" />
-                        <span>GOALSCORER</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[0.6rem] mono">
-                        <span className="w-2 h-2 bg-[#6ba642] rounded-full" />
-                        <span>PLAYMAKER</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[0.6rem] mono">
-                        <span className="w-2 h-2 bg-[#3b82f6] rounded-full" />
-                        <span>DEFENDER</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[0.6rem] mono">
-                        <span className="w-2 h-2 bg-[#a855f7] rounded-full" />
-                        <span>MIDFIELDER</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[0.6rem] mono">
-                        <span className="w-2 h-2 bg-[#eab308] rounded-full" />
-                        <span>FULLBACK</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-            {/* 3. Match Analytics Tab */}
-            {activeTab === 'analytics' && (
-              <div className="space-y-8 animate-fade-in">
-                
-                {/* 3.1 Outcome Prediction */}
-                <div className="border border-[#e4e6e1]/10 bg-black/30 backdrop-blur-md rounded p-6">
-                  <div className="flex justify-between items-center mb-6 border-b border-[#e4e6e1]/5 pb-3">
-                    <h3 className="mono text-[0.7rem] text-[#ff5a1f] tracking-widest uppercase">[ PREDICT_OUTCOME_ANALYSIS ]</h3>
-                    
-                    {receipts[`/predict/match/${selectedMatchId}`] && (
-                      <span className="mono text-[0.55rem] px-2 py-0.5 border border-[#ff5a1f]/30 bg-[#ff5a1f]/5 text-[#ff5a1f] rounded">
-                        SETTLED · 0.05 USDC · BASE
-                      </span>
-                    )}
-                  </div>
-
-                  {!predictionData ? (
-                    <div className="flex flex-col items-center justify-center py-10">
-                      <div className="w-8 h-8 border-2 border-t-[#ff5a1f] border-neutral-800 rounded-full animate-spin mb-4" />
-                      <span className="mono text-[0.65rem] text-neutral-500">GENERATING AI MATCH PREDICTIONS...</span>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                      {/* Probabilities gauge */}
-                      <div className="border border-[#e4e6e1]/5 bg-[#070806]/40 p-6 rounded flex flex-col justify-between">
-                        <h4 className="mono text-[0.65rem] text-neutral-500 uppercase mb-4">ALGORITHM_PROBABILITIES</h4>
-                        
-                        <div className="space-y-4">
-                          {/* Home win */}
-                          <div>
-                            <div className="flex justify-between text-[0.7rem] mono mb-1.5">
-                              <span>{predictionData.home_team.toUpperCase()}_WIN</span>
-                              <span className="text-[#ff5a1f] font-semibold">{predictionData.probabilities.home_win}%</span>
-                            </div>
-                            <div className="h-[3px] bg-neutral-900 overflow-hidden rounded-full">
-                              <div className="h-full bg-[#ff5a1f]" style={{ width: `${predictionData.probabilities.home_win}%` }} />
-                            </div>
-                          </div>
-
-                          {/* Away win */}
-                          <div>
-                            <div className="flex justify-between text-[0.7rem] mono mb-1.5">
-                              <span>{predictionData.away_team.toUpperCase()}_WIN</span>
-                              <span className="text-white font-semibold">{predictionData.probabilities.away_win}%</span>
-                            </div>
-                            <div className="h-[3px] bg-neutral-900 overflow-hidden rounded-full">
-                              <div className="h-full bg-neutral-400" style={{ width: `${predictionData.probabilities.away_win}%` }} />
-                            </div>
-                          </div>
-
-                          {/* Draw */}
-                          <div>
-                            <div className="flex justify-between text-[0.7rem] mono mb-1.5">
-                              <span>DRAW</span>
-                              <span className="text-neutral-500 font-semibold">{predictionData.probabilities.draw}%</span>
-                            </div>
-                            <div className="h-[3px] bg-neutral-900 overflow-hidden rounded-full">
-                              <div className="h-full bg-neutral-700" style={{ width: `${predictionData.probabilities.draw}%` }} />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mono text-[0.55rem] text-neutral-600 border-t border-neutral-900 pt-4 mt-6">
-                          ENGINE: FULL_BACK_MATCHUP_SIMULATOR_V1
-                        </div>
-                      </div>
-
-                      {/* AI Prediction Text */}
-                      <div className="lg:col-span-2 flex flex-col">
-                        <h4 className="mono text-[0.65rem] text-neutral-500 uppercase mb-3">AI_ANALYST_REPORT</h4>
-                        <div className="prose prose-invert max-w-none text-[0.75rem] text-neutral-300 leading-relaxed font-jetbrains bg-black/10 border border-neutral-900 p-5 rounded overflow-y-auto max-h-[300px]">
-                          {predictionData.prediction_analysis.split('\n').map((para: string, idx: number) => (
-                            <p key={idx} className="mb-3">{para}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 3.2 Tactical Post-Match Breakdown */}
-                <div className="border border-[#e4e6e1]/10 bg-black/30 backdrop-blur-md rounded p-6">
-                  <div className="flex justify-between items-center mb-6 border-b border-[#e4e6e1]/5 pb-3">
-                    <h3 className="mono text-[0.7rem] text-[#ff5a1f] tracking-widest uppercase">[ TACTICAL_POST_MATCH_BREAKDOWN ]</h3>
-                    
-                    {receipts[`/tactical/match/${selectedMatchId}`] && (
-                      <span className="mono text-[0.55rem] px-2 py-0.5 border border-[#ff5a1f]/30 bg-[#ff5a1f]/5 text-[#ff5a1f] rounded">
-                        SETTLED · 0.10 USDC · BASE
-                      </span>
-                    )}
-                  </div>
-
-                  {!breakdownData ? (
-                    <div className="flex flex-col items-center justify-center py-10">
-                      <div className="w-8 h-8 border-2 border-t-[#ff5a1f] border-neutral-800 rounded-full animate-spin mb-4" />
-                      <span className="mono text-[0.65rem] text-neutral-500">GENERATING AI TACTICAL REPORT...</span>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                      {/* Telemetry Stats */}
-                      <div className="border border-[#e4e6e1]/5 bg-[#070806]/40 p-6 rounded flex flex-col justify-between">
-                        <div>
-                          <h4 className="mono text-[0.65rem] text-neutral-500 uppercase mb-4">MATCH_STATS_TELEMETRY</h4>
-                          
-                          <div className="space-y-3 font-jetbrains text-[0.7rem]">
-                            {/* Possession */}
-                            <div className="flex justify-between items-center border-b border-neutral-900 pb-1.5">
-                              <span className="text-neutral-400">POSSESSION</span>
-                              <span className="text-white font-semibold">
-                                {breakdownData.stats_snapshot.possession.home}% / {breakdownData.stats_snapshot.possession.away}%
-                              </span>
-                            </div>
-                            {/* Shots */}
-                            <div className="flex justify-between items-center border-b border-neutral-900 pb-1.5">
-                              <span className="text-neutral-400">SHOTS (ON_TARGET)</span>
-                              <span className="text-white font-semibold">
-                                {breakdownData.stats_snapshot.shots.home}({breakdownData.stats_snapshot.shots_on_target.home}) / {breakdownData.stats_snapshot.shots.away}({breakdownData.stats_snapshot.shots_on_target.away})
-                              </span>
-                            </div>
-                            {/* Pass accuracy */}
-                            <div className="flex justify-between items-center border-b border-neutral-900 pb-1.5">
-                              <span className="text-neutral-400">PASS_ACCURACY</span>
-                              <span className="text-white font-semibold">
-                                {breakdownData.stats_snapshot.pass_accuracy.home}% / {breakdownData.stats_snapshot.pass_accuracy.away}%
-                              </span>
-                            </div>
-                            {/* Corners */}
-                            <div className="flex justify-between items-center pb-1.5">
-                              <span className="text-neutral-400">CORNERS</span>
-                              <span className="text-white font-semibold">
-                                {breakdownData.stats_snapshot.corners.home} / {breakdownData.stats_snapshot.corners.away}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mono text-[0.55rem] text-neutral-600 border-t border-neutral-900 pt-4 mt-6">
-                          POST_MATCH_FINAL_SCORE: {breakdownData.score}
-                        </div>
-                      </div>
-
-                      {/* Breakdown Text */}
-                      <div className="lg:col-span-2 flex flex-col">
-                        <h4 className="mono text-[0.65rem] text-neutral-500 uppercase mb-3">AI_TACTICAL_BREAKDOWN</h4>
-                        <div className="prose prose-invert max-w-none text-[0.75rem] text-neutral-300 leading-relaxed font-jetbrains bg-black/10 border border-neutral-900 p-5 rounded overflow-y-auto max-h-[300px]">
-                          {breakdownData.tactical_breakdown.split('\n').map((para: string, idx: number) => (
-                            <p key={idx} className="mb-3">{para}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            )}
-
-            {/* 4. Highlight Detector Tab */}
-            {activeTab === 'highlights' && (
-              <div className="space-y-8 animate-fade-in">
-                
-                <div className="border border-[#e4e6e1]/10 bg-black/30 backdrop-blur-md rounded p-6">
-                  <div className="flex justify-between items-center mb-6 border-b border-[#e4e6e1]/5 pb-3">
-                    <h3 className="mono text-[0.7rem] text-[#ff5a1f] tracking-widest uppercase">[ AUDIO_PEAK_HIGHLIGHT_DETECTOR ]</h3>
-                    
-                    {receipts[`/highlights/match/${selectedMatchId}`] && (
-                      <span className="mono text-[0.55rem] px-2 py-0.5 border border-[#ff5a1f]/30 bg-[#ff5a1f]/5 text-[#ff5a1f] rounded">
-                        SETTLED · 0.08 USDC · BASE
-                      </span>
-                    )}
-                  </div>
-
-                  {highlightsData.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10">
-                      <div className="w-8 h-8 border-2 border-t-[#ff5a1f] border-neutral-800 rounded-full animate-spin mb-4" />
-                      <span className="mono text-[0.65rem] text-neutral-500">EXTRACTING CROWD CHEER DECIBEL SPECTRUM...</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-8">
-                      {/* simulated wave plot */}
-                      <div className="border border-neutral-900 bg-neutral-950/40 p-4 rounded relative">
-                        <div className="mono text-[0.55rem] text-neutral-500 mb-2 uppercase">AUDIO_RMS_LOUDNESS_DECIBELS (PEAKS MARKED)</div>
-                        <svg className="w-full h-16" viewBox="0 0 1000 64" preserveAspectRatio="none">
-                          <path
-                            d={`M 0 32 ${Array.from({length: 100}, (_, i) => {
-                              const isPeak = i === 18 || i === 58 || i === 82;
-                              const height = isPeak ? 10 + Math.random() * 40 : 15 + Math.random() * 15;
-                              return `L ${i * 10} ${32 - height} L ${i * 10 + 5} ${32 + height}`;
-                            }).join(' ')} L 1000 32`}
-                            fill="none"
-                            stroke="rgba(255, 255, 255, 0.15)"
-                            strokeWidth="1.5"
-                          />
-                          
-                          {/* Marked peaks */}
-                          <circle cx="180" cy="12" r="4" fill="#ff5a1f" />
-                          <line x1="180" y1="12" x2="180" y2="64" stroke="#ff5a1f" strokeDasharray="3,3" strokeWidth="1" />
-                          
-                          <circle cx="580" cy="8" r="4" fill="#ff5a1f" />
-                          <line x1="580" y1="8" x2="580" y2="64" stroke="#ff5a1f" strokeDasharray="3,3" strokeWidth="1" />
-                          
-                          <circle cx="820" cy="10" r="4" fill="#ff5a1f" />
-                          <line x1="820" y1="10" x2="820" y2="64" stroke="#ff5a1f" strokeDasharray="3,3" strokeWidth="1" />
-                        </svg>
-                      </div>
-
-                      {/* Video gallery grid */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {highlightsData.map((clip) => (
-                          <div key={clip.id} className="border border-neutral-800 bg-[#070806] rounded overflow-hidden flex flex-col justify-between group hover:border-[#ff5a1f]/30 transition">
-                            <div className="relative aspect-video bg-neutral-900">
-                              <video
-                                src={clip.video_url}
-                                controls
-                                poster={clip.thumbnail_url}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <div className="p-4 space-y-2">
-                              <div className="flex justify-between items-center text-[0.65rem] mono text-neutral-500">
-                                <span>TIMESTAMP: {intToTime(clip.timestamp)}</span>
-                                <span>DURATION: {clip.duration}s</span>
-                              </div>
-                              <p className="text-[0.7rem] text-neutral-300 leading-relaxed font-jetbrains">
-                                {clip.description}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            )}
-
-            {/* 5. Chat Analyst Tab */}
-            {activeTab === 'chat' && (
-              <div className="h-[calc(100vh-14rem)] flex flex-col border border-[#e4e6e1]/10 bg-black/30 backdrop-blur-md rounded overflow-hidden animate-fade-in">
-                
-                {/* Messages pane */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono text-[0.75rem]">
-                  {messages.map((m, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex ${m.sender === 'user' ? 'justify-end' : m.sender === 'system' ? 'justify-center' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-xl p-4 rounded border whitespace-pre-wrap leading-relaxed ${m.sender === 'user' ? 'bg-[#ff5a1f]/10 border-[#ff5a1f]/30 text-white' : m.sender === 'system' ? 'bg-neutral-950 border-neutral-900 text-neutral-500 text-[0.65rem] text-center w-full' : 'bg-neutral-900/50 border-[#e4e6e1]/5 text-neutral-300'}`}
-                      >
-                        {m.sender === 'assistant' && (
-                          <div className="text-[#ff5a1f] text-[0.6rem] uppercase tracking-widest font-bold mb-1">[ FULL_BACK_ANALYST ]</div>
-                        )}
-                        {m.sender === 'user' && (
-                          <div className="text-white text-[0.6rem] uppercase tracking-widest font-bold mb-1 text-right">[ USER ]</div>
-                        )}
-                        {m.text}
-                      </div>
-                    </div>
-                  ))}
-                  {chatLoading && (
-                    <div className="flex justify-start">
-                      <div className="max-w-xl p-4 rounded border bg-neutral-900/50 border-[#e4e6e1]/5 text-neutral-500 animate-pulse">
-                        ANALYST IS COMPILING TACTICAL DATA...
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Input form */}
-                <form onSubmit={handleChatSubmit} className="h-14 border-t border-[#e4e6e1]/10 bg-black/40 flex items-center px-4">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="ASK A TACTICAL QUESTION (e.g. 'what type of player is Lionel Messi' or 'predict match')"
-                    className="flex-1 bg-transparent text-[0.75rem] text-white focus:outline-none placeholder-neutral-600 font-jetbrains px-2"
-                  />
-                  <button
-                    type="submit"
-                    className="mono border border-neutral-800 text-neutral-400 px-4 py-1.5 rounded hover:border-[#ff5a1f] hover:text-[#ff5a1f] transition text-[0.7rem]"
-                  >
-                    SEND_QUERY
-                  </button>
-                </form>
-
-              </div>
-            )}
-
-          </div>
-
-        </main>
-
-        {/* 402 Paywall Modal */}
-        {paywallRequired && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 select-none">
-            <div className="max-w-md w-full border border-[#ff5a1f]/30 bg-[#070806] rounded p-6 shadow-2xl space-y-6 relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-[#ff5a1f]" />
-              
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 border border-neutral-800 bg-[#ff5a1f]/5 flex items-center justify-center text-[#ff5a1f] text-[1.2rem] font-bold">
-                  ▲
-                </div>
-                <div className="space-y-1">
-                  <h3 className="mono text-[0.85rem] font-bold text-white tracking-wider">HTTP 402 PAYMENT REQUIRED</h3>
-                  <div className="mono text-[0.6rem] text-neutral-500">SCHEME: EIP-3009 (EXACT) · NETWORK: BASE SEPOLIA</div>
-                </div>
-              </div>
-
-              <div className="border border-neutral-900 bg-black/40 p-4 rounded space-y-3 text-[0.7rem] mono">
-                <div className="flex justify-between border-b border-neutral-900 pb-1.5">
-                  <span className="text-neutral-500">RESOURCE_GATED:</span>
-                  <span className="text-white truncate max-w-[200px]">{paywallRequired.resource}</span>
-                </div>
-                <div className="flex justify-between border-b border-neutral-900 pb-1.5">
-                  <span className="text-neutral-500">PAY_TO_ADDRESS:</span>
-                  <span className="text-white font-semibold">0x7099797...79C8</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-500">REQUIRED_USDC:</span>
-                  <span className="text-[#ff5a1f] font-bold">{parseFloat(paywallRequired.amount) / 1000000} USDC</span>
-                </div>
-              </div>
-
-              <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed">
-                This endpoint requires payment via base Sepolia USDC micropayment. AI Analyst will sign a transaction and verify the settlement instantly.
-              </p>
-
-              {paymentStatus === '' ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => {
-                      const rejectFn = paywallRequired.reject;
-                      setPaywallRequired(null);
-                      rejectFn(new Error('User rejected payment authorization'));
-                    }}
-                    className="mono border border-neutral-800 text-neutral-400 py-2.5 hover:bg-neutral-900 transition tracking-wider text-[0.7rem] rounded"
-                  >
-                    ABORT_QUERY
-                  </button>
-                  <button
-                    onClick={handlePaywallSettle}
-                    className="mono bg-[#ff5a1f] text-white py-2.5 hover:bg-[#ff5a1f]/90 transition tracking-wider text-[0.7rem] font-bold rounded"
-                  >
-                    AUTHORIZE_&_PAY
-                  </button>
-                </div>
-              ) : (
-                <div className="border border-neutral-800 bg-neutral-950 p-4 rounded text-center space-y-2">
-                  {paymentStatus === 'signing' ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-t-[#ff5a1f] border-neutral-800 rounded-full animate-spin mx-auto mb-2" />
-                      <div className="mono text-[0.65rem] text-neutral-500 uppercase tracking-widest">SIGNING_EIP3009_PERMIT_PROOF...</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-green-500 text-[1.1rem] mb-1">✔ SETTLED</div>
-                      <div className="mono text-[0.55rem] text-neutral-500 uppercase truncate">TX: {paymentTx}</div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-      </div>
-    );
-  }
-
-  // Hero Landing Page
   return (
-    <div className="field-body select-none">
+    <div ref={pageContainerRef} className="min-h-screen bg-[#0E0E0E] text-[#ECEAE3] relative font-jetbrains selection:bg-[#D9622B]/30 flex flex-col">
+      {/* Film Grain Filter */}
       <svg className="absolute w-0 h-0 pointer-events-none">
         <filter id="grain">
           <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" />
           <feColorMatrix type="saturate" values="0" />
         </filter>
       </svg>
+      <div className="fixed inset-0 pointer-events-none opacity-[0.04] z-50 bg-repeat" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noiseFilter\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.85\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noiseFilter)\'/%3E%3C/svg%3E")' }} />
 
-      <div className="backdrop" />
-      <div className="field-grain" style={{ filter: 'url(#grain)' }} />
-
-      <div className="interface-grid">
-        <div className="flex items-center">
-          <img src={logoFull} alt="FULL BACK Logo" className="h-8 md:h-10 w-auto object-contain pointer-events-auto" />
+      {/* Global Background Elements */}
+      <div className="fixed inset-0 bg-[#0E0E0E] z-0" />
+      <div className="fixed top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#D9622B]/2 blur-[120px] rounded-full pointer-events-none z-0" />
+      
+      {/* Sticky Header Navigation */}
+      <header className="fixed top-0 left-0 w-full h-16 border-b border-[#2A2A28] bg-[#0E0E0E]/80 backdrop-blur-md z-40 px-6 md:px-12 flex items-center justify-between">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => handleNavigate('/')}>
+          <img src={logoMark} alt="Logo" className="w-8 h-8 object-contain" />
+          <span className="font-syncopate text-[0.8rem] tracking-widest font-bold hidden sm:inline-block">FULL BACK</span>
         </div>
-        <div className="mono text-right text-[#ff5a1f] text-[0.65rem] md:text-[0.7rem] leading-relaxed">
-          <div>LATITUDE: 41.8623° N</div>
-          <div>FLOODLIGHT: 4000K</div>
-        </div>
 
-        <h1 className="hero-title select-none">
-          FULL<br />BACK
-        </h1>
-
-        <div className="col-span-2 flex justify-between items-end gap-4 flex-wrap">
-          <div className="mono text-[0.7rem] md:text-[0.75rem] opacity-90 text-[#e4e6e1] leading-relaxed">
-            <p className="mb-1 text-[#ff5a1f] font-semibold">[ PREMIUM WORLD CUP ANALYSIS ENGINE ]</p>
-            <p>MICROPAYMENT GATED TACTICAL &amp; DATA SCIENCE TELEMETRY</p>
-          </div>
-          <button onClick={() => setEntered(true)} className="cta-button">
-            ENTER THE FIELD
+        <nav className="flex items-center gap-1 sm:gap-6">
+          <button
+            onClick={() => handleNavigate('/')}
+            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+          >
+            HOME
+            {currentPath === '/' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
           </button>
-        </div>
-      </div>
+          <button
+            onClick={() => handleNavigate('/dashboard')}
+            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/dashboard' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+          >
+            DASHBOARD
+            {currentPath === '/dashboard' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+          </button>
+          <button
+            onClick={() => handleNavigate('/analyst')}
+            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/analyst' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+          >
+            ANALYST
+            {currentPath === '/analyst' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+          </button>
+          <button
+            onClick={() => handleNavigate('/players')}
+            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/players' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+          >
+            PLAYERS
+            {currentPath === '/players' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+          </button>
+          <button
+            onClick={() => handleNavigate('/highlights')}
+            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/highlights' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+          >
+            HIGHLIGHTS
+            {currentPath === '/highlights' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+          </button>
+          <button
+            onClick={() => handleNavigate('/developers')}
+            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/developers' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+          >
+            DEVELOPERS
+            {currentPath === '/developers' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+          </button>
+        </nav>
+      </header>
 
-      <div className="viewport">
-        <div className="canvas-3d" ref={canvasRef} id="canvas3d">
-          <div className="layer layer-1" ref={layer1Ref} data-layer="0" />
-          <div className="layer layer-2" ref={layer2Ref} data-layer="1" />
-          <div className="layer layer-3" ref={layer3Ref} data-layer="2" />
-          <div className="yard-lines" />
-        </div>
-      </div>
+      {/* Main Content Body */}
+      <main className="flex-grow pt-16 z-10 flex flex-col relative">
+        
+        {/* Route transition sweep curtain */}
+        <div
+          ref={transitionSweepRef}
+          className="fixed top-0 left-0 w-full h-full bg-[#D9622B] z-50 transform -translate-x-full pointer-events-none"
+        />
 
-      <div className="scroll-hint" />
+        {/* 1. HOME PATH */}
+        {currentPath === '/' && (
+          <div className="flex-grow flex flex-col items-center justify-center relative min-h-[calc(100vh-4rem)] p-6 md:p-12 overflow-hidden">
+            
+            {/* Background 3D rotating canvas rig */}
+            <div ref={canvas3dRef} id="stadium-backdrop" className="absolute inset-0 z-0 opacity-20 pointer-events-none">
+              <LowPolyCanvas />
+            </div>
+
+            <div className="max-w-4xl w-full text-center space-y-8 z-10 relative">
+              <div className="mono text-[0.7rem] md:text-[0.8rem] text-[#D9622B] tracking-widest uppercase">
+                [ SEASON 2026 — TELEMETRY HUB ]
+              </div>
+              
+              <h1 className="hero-title font-syncopate text-[2.5rem] sm:text-[4.5rem] md:text-[6.5rem] font-bold leading-none tracking-tighter uppercase select-none">
+                FULL BACK
+              </h1>
+              
+              <p className="max-w-xl mx-auto text-neutral-400 text-[0.85rem] md:text-[0.95rem] leading-relaxed font-jetbrains">
+                An AI match analyst, exposed as an MCP server, that any fan or agent can query for World Cup insight — free for basics, pay-per-query in USDC.
+              </p>
+
+              <div className="pt-6">
+                <button
+                  onClick={() => handleNavigate('/dashboard')}
+                  className="mono border border-[#ECEAE3] text-[#ECEAE3] px-8 py-3 bg-transparent hover:bg-[#D9622B] hover:border-[#D9622B] transition duration-300 font-semibold tracking-wider text-[0.75rem] cursor-pointer"
+                >
+                  ENTER THE FIELD
+                </button>
+              </div>
+            </div>
+
+            {/* Corner telemetries */}
+            <div className="absolute bottom-6 left-8 mono text-[0.6rem] text-neutral-500 leading-relaxed text-left select-none hidden md:block">
+              <div>LATITUDE: 41.8623° N</div>
+              <div>FLOODLIGHT: 4000K</div>
+            </div>
+            <div className="absolute bottom-6 right-8 mono text-[0.6rem] text-neutral-500 leading-relaxed text-right select-none hidden md:block">
+              <div>USDC_GATE: ACTIVE</div>
+              <div>SETTLEMENT: BASE_SEPOLIA</div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. DASHBOARD PATH */}
+        {currentPath === '/dashboard' && (
+          <div className="p-8 max-w-6xl w-full mx-auto space-y-8 animate-fade-in flex-grow">
+            <div className="border-b border-[#2A2A28] pb-4 flex justify-between items-end">
+              <div>
+                <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ STAGE_GROUP_A_&_B ]</span>
+                <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">LIVE SCORES &amp; STANDINGS</h1>
+              </div>
+              <span className="mono text-[0.6rem] text-neutral-500">REFRESHED: LIVE TELEMETRY</span>
+            </div>
+
+            {/* Free Standings tables */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              
+              {/* Group A */}
+              <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+                <div className="flex justify-between items-center mb-4 border-b border-[#2A2A28]/50 pb-2">
+                  <span className="font-syncopate text-[0.75rem] font-bold tracking-widest text-white">GROUP A</span>
+                  <span className="mono text-[0.6rem] text-neutral-500">STAGE_ROUND_1</span>
+                </div>
+                <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
+                  <thead>
+                    <tr className="text-neutral-500 border-b border-[#2A2A28]">
+                      <th className="py-2">POS</th>
+                      <th className="py-2">TEAM</th>
+                      <th className="py-2 text-center">P</th>
+                      <th className="py-2 text-center">W-D-L</th>
+                      <th className="py-2 text-center">GD</th>
+                      <th className="py-2 text-right">PTS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2A2A28]/50">
+                    <tr className="hover:bg-neutral-900/30">
+                      <td className="py-2.5 text-[#D9622B]">1</td>
+                      <td className="py-2.5 font-semibold text-white">🇩🇪 GERMANY</td>
+                      <td className="py-2.5 text-center">1</td>
+                      <td className="py-2.5 text-center">1-0-0</td>
+                      <td className="py-2.5 text-center">+2</td>
+                      <td className="py-2.5 text-right font-bold">3</td>
+                    </tr>
+                    <tr className="hover:bg-neutral-900/30">
+                      <td className="py-2.5 text-neutral-400">2</td>
+                      <td className="py-2.5 font-semibold text-white">🇺🇸 UNITED STATES</td>
+                      <td className="py-2.5 text-center">1</td>
+                      <td className="py-2.5 text-center">1-0-0</td>
+                      <td className="py-2.5 text-center">+1</td>
+                      <td className="py-2.5 text-right font-bold">3</td>
+                    </tr>
+                    <tr className="hover:bg-neutral-900/30">
+                      <td className="py-2.5 text-neutral-400">3</td>
+                      <td className="py-2.5 font-semibold text-white">🇨🇴 COLOMBIA</td>
+                      <td className="py-2.5 text-center">1</td>
+                      <td className="py-2.5 text-center">0-0-1</td>
+                      <td className="py-2.5 text-center">-1</td>
+                      <td className="py-2.5 text-right font-bold">0</td>
+                    </tr>
+                    <tr className="hover:bg-neutral-900/30">
+                      <td className="py-2.5 text-neutral-400">4</td>
+                      <td className="py-2.5 font-semibold text-white">🇯🇵 JAPAN</td>
+                      <td className="py-2.5 text-center">1</td>
+                      <td className="py-2.5 text-center">0-0-1</td>
+                      <td className="py-2.5 text-center">-2</td>
+                      <td className="py-2.5 text-right font-bold">0</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Group B */}
+              <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+                <div className="flex justify-between items-center mb-4 border-b border-[#2A2A28]/50 pb-2">
+                  <span className="font-syncopate text-[0.75rem] font-bold tracking-widest text-white">GROUP B</span>
+                  <span className="mono text-[0.6rem] text-neutral-500">STAGE_ROUND_1</span>
+                </div>
+                <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
+                  <thead>
+                    <tr className="text-neutral-500 border-b border-[#2A2A28]">
+                      <th className="py-2">POS</th>
+                      <th className="py-2">TEAM</th>
+                      <th className="py-2 text-center">P</th>
+                      <th className="py-2 text-center">W-D-L</th>
+                      <th className="py-2 text-center">GD</th>
+                      <th className="py-2 text-right">PTS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2A2A28]/50">
+                    <tr className="hover:bg-neutral-900/30">
+                      <td className="py-2.5 text-[#D9622B]">1</td>
+                      <td className="py-2.5 font-semibold text-white">🇫🇷 FRANCE</td>
+                      <td className="py-2.5 text-center">1</td>
+                      <td className="py-2.5 text-center">1-0-0</td>
+                      <td className="py-2.5 text-center">+1</td>
+                      <td className="py-2.5 text-right font-bold">3</td>
+                    </tr>
+                    <tr className="hover:bg-neutral-900/30">
+                      <td className="py-2.5 text-neutral-400">2</td>
+                      <td className="py-2.5 font-semibold text-white">🇦🇷 ARGENTINA</td>
+                      <td className="py-2.5 text-center">1</td>
+                      <td className="py-2.5 text-center">0-1-0</td>
+                      <td className="py-2.5 text-center">0</td>
+                      <td className="py-2.5 text-right font-bold">1</td>
+                    </tr>
+                    <tr className="hover:bg-neutral-900/30">
+                      <td className="py-2.5 text-neutral-400">3</td>
+                      <td className="py-2.5 font-semibold text-white">🏴󠁧󠁢󠁥󠁮󠁧󠁿 ENGLAND</td>
+                      <td className="py-2.5 text-center">1</td>
+                      <td className="py-2.5 text-center">0-1-0</td>
+                      <td className="py-2.5 text-center">0</td>
+                      <td className="py-2.5 text-right font-bold">1</td>
+                    </tr>
+                    <tr className="hover:bg-neutral-900/30">
+                      <td className="py-2.5 text-neutral-400">4</td>
+                      <td className="py-2.5 font-semibold text-white">🇲🇦 MOROCCO</td>
+                      <td className="py-2.5 text-center">1</td>
+                      <td className="py-2.5 text-center">0-0-1</td>
+                      <td className="py-2.5 text-center">-1</td>
+                      <td className="py-2.5 text-right font-bold">0</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+
+            {/* Match Board */}
+            <div>
+              <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ TODAY_FIXTURES ]</h3>
+              <div className="space-y-4">
+                
+                {/* USA vs COL */}
+                <div className="border border-[#2A2A28] bg-[#171715]/20 p-6 rounded flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-6">
+                    <span className="mono text-[0.75rem] text-[#D9622B] font-bold">[ M001 ]</span>
+                    <div>
+                      <div className="text-[0.95rem] font-semibold text-white">🇺🇸 UNITED STATES vs 🇨🇴 COLOMBIA</div>
+                      <div className="mono text-[0.6rem] text-neutral-500 mt-1">GROUP A · STADIUM: COPA FIELD</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="mono text-[0.9rem] font-bold text-[#D9622B] border border-[#D9622B]/20 bg-[#D9622B]/5 px-4 py-1.5 rounded">
+                      2 - 1
+                    </div>
+                    <div className="mono text-right text-[0.65rem] text-[#8B8A85]">
+                      <div>STATUS: FINISHED</div>
+                      <div>DATE: 2026-06-12</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* GER vs JPN */}
+                <div className="border border-[#2A2A28] bg-[#171715]/20 p-6 rounded flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-6">
+                    <span className="mono text-[0.75rem] text-[#D9622B] font-bold">[ M002 ]</span>
+                    <div>
+                      <div className="text-[0.95rem] font-semibold text-white">🇩🇪 GERMANY vs 🇯🇵 JAPAN</div>
+                      <div className="mono text-[0.6rem] text-neutral-500 mt-1">GROUP A · STADIUM: BERLIN ARENA</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="mono text-[0.9rem] font-bold text-[#D9622B] border border-[#D9622B]/20 bg-[#D9622B]/5 px-4 py-1.5 rounded">
+                      3 - 1
+                    </div>
+                    <div className="mono text-right text-[0.65rem] text-[#8B8A85]">
+                      <div>STATUS: FINISHED</div>
+                      <div>DATE: 2026-06-13</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ARG vs ENG */}
+                <div className="border border-[#2A2A28] bg-[#171715]/20 p-6 rounded flex flex-col sm:flex-row items-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-6">
+                    <span className="mono text-[0.75rem] text-[#D9622B] font-bold">[ M003 ]</span>
+                    <div>
+                      <div className="text-[0.95rem] font-semibold text-white">🇦🇷 ARGENTINA vs 🏴󠁧󠁢󠁥󠁮󠁧󠁿 ENGLAND</div>
+                      <div className="mono text-[0.6rem] text-neutral-500 mt-1">GROUP B · STADIUM: LUSAIL CUP</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="mono text-[0.9rem] font-bold text-[#D9622B] border border-[#D9622B]/20 bg-[#D9622B]/5 px-4 py-1.5 rounded">
+                      2 - 2
+                    </div>
+                    <div className="mono text-right text-[0.65rem] text-[#8B8A85]">
+                      <div>STATUS: FINISHED</div>
+                      <div>DATE: 2026-06-14</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 3. AI CHAT / ANALYST PATH */}
+        {currentPath === '/analyst' && (
+          <div className="p-8 max-w-6xl w-full mx-auto space-y-8 animate-fade-in flex-grow flex flex-col">
+            <div className="border-b border-[#2A2A28] pb-4 flex justify-between items-end">
+              <div>
+                <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ PREDICTIVE_TACTICAL_HUD ]</span>
+                <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">AI MATCH ANALYST</h1>
+              </div>
+              
+              {/* Match selector */}
+              <div className="flex items-center gap-2">
+                <span className="mono text-[0.6rem] text-neutral-500 uppercase tracking-widest mr-2">TARGET_ID:</span>
+                {['M001', 'M002', 'M003'].map(id => (
+                  <button
+                    key={id}
+                    onClick={() => setSelectedMatchId(id)}
+                    className={`mono text-[0.65rem] px-2.5 py-1 rounded border transition ${selectedMatchId === id ? 'border-[#D9622B] text-[#D9622B] bg-[#D9622B]/5' : 'border-neutral-800 text-neutral-400 hover:border-neutral-700'}`}
+                  >
+                    {id}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              
+              {/* Gated Prediction panel */}
+              <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between relative overflow-hidden">
+                <div>
+                  <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ OUTCOME_PREDICTION ]</h3>
+                  
+                  {!predictionData ? (
+                    <div className="flex flex-col items-center justify-center h-48">
+                      <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
+                      <span className="mono text-[0.6rem] text-neutral-500">REQUESTING ENGINES...</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex justify-between text-[0.7rem] mono mb-1.5">
+                            <span>{predictionData.home_team.toUpperCase()}_WIN</span>
+                            <span className="text-[#D9622B] font-semibold">{predictionData.probabilities.home_win}%</span>
+                          </div>
+                          <div className="h-[2px] bg-neutral-900 overflow-hidden">
+                            <div className="h-full bg-[#D9622B]" style={{ width: `${predictionData.probabilities.home_win}%` }} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-[0.7rem] mono mb-1.5">
+                            <span>{predictionData.away_team.toUpperCase()}_WIN</span>
+                            <span className="text-white font-semibold">{predictionData.probabilities.away_win}%</span>
+                          </div>
+                          <div className="h-[2px] bg-neutral-900 overflow-hidden">
+                            <div className="h-full bg-neutral-400" style={{ width: `${predictionData.probabilities.away_win}%` }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-[#2A2A28] pt-4">
+                        <div className="mono text-[0.55rem] text-neutral-500 mb-2">AI_SUMMARY_WRITEUP:</div>
+                        <p className="text-[0.75rem] text-neutral-300 leading-relaxed font-jetbrains">
+                          {predictionData.summary}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-[#2A2A28] pt-4 mt-6">
+                  {receipts[`/predict/match/${selectedMatchId}`] ? (
+                    <div className="mono text-[0.55rem] text-[#D9622B] uppercase">
+                      SETTLED · 0.05 USDC · Base Sepolia · Tx_{receipts[`/predict/match/${selectedMatchId}`].tx.slice(0, 10)}...
+                    </div>
+                  ) : (
+                    <div className="mono text-[0.55rem] text-neutral-500">
+                      STATUS: PENDING_MICROPAYMENT
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Gated Post-match Breakdown */}
+              <div className="lg:col-span-2 border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between relative overflow-hidden">
+                <div className="flex-1 flex flex-col min-h-0">
+                  <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ POST_MATCH_TACTICAL_BREAKDOWN ]</h3>
+                  
+                  {!breakdownData ? (
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
+                      <span className="mono text-[0.6rem] text-neutral-500">COMPILING TELEMETRY STATS...</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 flex-grow overflow-y-auto max-h-[350px] pr-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-black/30 p-4 border border-[#2A2A28] rounded mb-4 text-[0.65rem] mono">
+                        <div>
+                          <div className="text-neutral-500 uppercase">POSSESSION</div>
+                          <div className="text-white font-bold">{breakdownData.stats_snapshot.possession.home}% / {breakdownData.stats_snapshot.possession.away}%</div>
+                        </div>
+                        <div>
+                          <div className="text-neutral-500 uppercase">SHOTS (ON_TARGET)</div>
+                          <div className="text-white font-bold">{breakdownData.stats_snapshot.shots.home}({breakdownData.stats_snapshot.shots_on_target.home})</div>
+                        </div>
+                        <div>
+                          <div className="text-neutral-500 uppercase">PASS_ACCURACY</div>
+                          <div className="text-white font-bold">{breakdownData.stats_snapshot.pass_accuracy.home}%</div>
+                        </div>
+                        <div>
+                          <div className="text-neutral-500 uppercase">CORNERS</div>
+                          <div className="text-[#D9622B] font-bold">{breakdownData.stats_snapshot.corners.home} / {breakdownData.stats_snapshot.corners.away}</div>
+                        </div>
+                      </div>
+                      
+                      <p className="text-[0.75rem] text-neutral-300 leading-relaxed font-jetbrains whitespace-pre-wrap">
+                        {breakdownData.tactical_breakdown}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-[#2A2A28] pt-4 mt-6 flex justify-between items-center">
+                  <span className="mono text-[0.6rem] text-neutral-500">USDC_FACILITATOR: CIRCLE_CCTP</span>
+                  {receipts[`/tactical/match/${selectedMatchId}`] && (
+                    <span className="mono text-[0.55rem] px-2 py-0.5 border border-[#D9622B]/30 bg-[#D9622B]/5 text-[#D9622B] rounded">
+                      SETTLED · 0.10 USDC · BASE
+                    </span>
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Chat Analyst HUD terminal */}
+            <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between min-h-[350px]">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase">[ ANALYST_CHAT_TERMINAL ]</h3>
+                <span className="mono text-[0.6rem] text-neutral-500">SESSION: ACTIVE_SECURE</span>
+              </div>
+              
+              <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-2 font-mono text-[0.7rem] max-h-[250px]">
+                {messages.map((msg, idx) => (
+                  <div key={idx} className={`p-3 rounded border ${msg.sender === 'user' ? 'bg-black/30 border-[#2A2A28] text-[#ECEAE3]' : msg.sender === 'system' ? 'bg-[#D9622B]/5 border-[#D9622B]/20 text-[#D9622B]' : 'bg-neutral-900/40 border-[#2A2A28]/50 text-neutral-300'}`}>
+                    <div className="text-[0.65rem] text-neutral-500 uppercase tracking-widest mb-1">
+                      {msg.sender === 'user' ? 'USER_SHELL' : msg.sender === 'system' ? 'SYSTEM_LOG' : 'ANALYST_RESP'}
+                    </div>
+                    <div className="whitespace-pre-wrap font-jetbrains">{msg.text}</div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="text-neutral-500 animate-pulse mono text-[0.65rem]">ANALYST IS COMPUTING...</div>
+                )}
+              </div>
+
+              <form onSubmit={handleChatSubmit} className="flex gap-3">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="INTERROGATE FULL BACK (e.g. 'predict outcome' or 'similar to Christian Pulisic')..."
+                  className="flex-grow bg-[#0E0E0E] border border-[#2A2A28] rounded px-4 py-2.5 text-[0.75rem] text-white focus:outline-none focus:border-[#D9622B] font-jetbrains"
+                />
+                <button
+                  type="submit"
+                  disabled={chatLoading}
+                  className="mono bg-[#D9622B] text-white px-6 py-2.5 hover:bg-[#D9622B]/90 transition tracking-wider text-[0.7rem] font-bold rounded cursor-pointer"
+                >
+                  SEND
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* 4. PLAYER INSIGHTS PATH */}
+        {currentPath === '/players' && (
+          <div className="p-8 max-w-6xl w-full mx-auto space-y-8 animate-fade-in flex-grow">
+            <div className="border-b border-[#2A2A28] pb-4 flex justify-between items-end">
+              <div>
+                <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ K-MEANS_CLUSTERING_Archetypes ]</span>
+                <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">PLAYER STYLE ANALYSIS</h1>
+              </div>
+              <span className="mono text-[0.6rem] text-neutral-500">COMPILERS: SCIKIT-LEARN KMeans</span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              
+              {/* Left Selector pane */}
+              <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between">
+                <div>
+                  <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ TARGET_SELECTOR ]</h3>
+                  <p className="mono text-[0.65rem] text-neutral-500 leading-relaxed mb-6">
+                    SELECT A TARGET ATHLETE TO QUERY STYLE CORRELATION CENTROIDS.
+                  </p>
+                  
+                  <div className="space-y-2">
+                    <label className="mono text-[0.6rem] text-neutral-400">PLAYER_ID_NAME:</label>
+                    <select
+                      value={selectedPlayer}
+                      onChange={(e) => setSelectedPlayer(e.target.value)}
+                      className="w-full bg-[#0E0E0E] border border-[#2A2A28] rounded px-3 py-2 text-[0.75rem] text-white focus:outline-none focus:border-[#D9622B] font-jetbrains"
+                    >
+                      {players.length > 0 ? (
+                        players.slice(0, 30).map(p => (
+                          <option key={p.player_id} value={p.player_id}>
+                            {p.name} ({p.position})
+                          </option>
+                        ))
+                      ) : (
+                        <option>Loading player list...</option>
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-[#2A2A28] mt-6">
+                  <div className="mono text-[0.6rem] text-neutral-500 flex justify-between">
+                    <span>SILHOUETTE_SCORE:</span>
+                    <span className="text-[#D9622B] font-bold">0.226</span>
+                  </div>
+                  <div className="mono text-[0.6rem] text-neutral-500 flex justify-between mt-1.5">
+                    <span>ARCHETYPE_CLUSTERS:</span>
+                    <span className="text-white">K=5</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Center results pane */}
+              <div className="lg:col-span-2 border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between min-h-[300px]">
+                
+                {!playerClusterData ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center">
+                    <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
+                    <span className="mono text-[0.65rem] text-neutral-500">RETRIEVING MULTIVARIATE DATA...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-6 flex-grow flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start border-b border-[#2A2A28] pb-3">
+                        <div>
+                          <h2 className="text-[1.1rem] font-bold text-white uppercase">{playerClusterData.player.name}</h2>
+                          <div className="mono text-[0.6rem] text-neutral-500 mt-1">
+                            NAT: {playerClusterData.player.nationality.toUpperCase()} · POSITION: {playerClusterData.player.position.toUpperCase()}
+                          </div>
+                        </div>
+                        
+                        {receipts[`/cluster/player/${selectedPlayer}`] && (
+                          <span className="mono text-[0.55rem] px-2 py-0.5 border border-[#D9622B]/30 bg-[#D9622B]/5 text-[#D9622B] rounded">
+                            SETTLED · 0.01 USDC
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                        <div>
+                          <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-2">ARCHETYPE_CENTROID</div>
+                          <div className="border border-[#D9622B]/20 bg-[#D9622B]/5 rounded p-3 text-[0.75rem] font-bold text-[#D9622B] tracking-wide">
+                            {playerClusterData.player.archetype.toUpperCase()}
+                          </div>
+                          <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed mt-2.5">
+                            Assigned based on Goals, Assists, Key Passes, and Tackles per 90 telemetry.
+                          </p>
+                        </div>
+
+                        <div>
+                          <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-2">NEAREST_NEIGHBOR_MATRICES</div>
+                          <div className="space-y-1.5">
+                            {playerClusterData.similar_players.slice(0, 3).map((p: any) => (
+                              <div key={p.player_id} className="flex justify-between items-center text-[0.7rem] bg-[#0E0E0E] border border-[#2A2A28] px-3 py-2 rounded">
+                                <span className="font-semibold text-white">{p.name}</span>
+                                <span className="mono text-[0.6rem] text-[#D9622B]">DIST: {p.similarity_distance.toFixed(3)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-[#2A2A28] pt-4 flex justify-between items-center text-[0.65rem] mono text-neutral-500">
+                      <span>VAL: €{playerClusterData.player.market_value_m}M</span>
+                      <span>MIN: {playerClusterData.player.minutes_played}m</span>
+                      <span>GOALS/90: {((playerClusterData.player.goals / playerClusterData.player.minutes_played) * 90).toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Interactive Scatter Plot */}
+            <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+              <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ PCA_2D_PROJECTION_MATRIX ]</h3>
+              <div className="relative aspect-[21/9] w-full border border-[#2A2A28] bg-black/40 rounded overflow-hidden flex items-center justify-center">
+                
+                {players.length === 0 ? (
+                  <span className="mono text-[0.65rem] text-neutral-500">LOADING PCA DIMENSION MAP...</span>
+                ) : (
+                  <svg className="w-full h-full" viewBox="0 0 1000 400">
+                    <line x1="500" y1="0" x2="500" y2="400" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                    <line x1="0" y1="200" x2="1000" y2="200" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
+                    
+                    {players.map((p) => {
+                      const px = p.pca_x || 0;
+                      const py = p.pca_y || 0;
+                      const cx = 500 + px * 90;
+                      const cy = 200 - py * 90;
+                      const isSelected = p.player_id === selectedPlayer;
+                      const clusterColor = p.cluster === 0 ? '#D9622B' : p.cluster === 1 ? '#6ba642' : p.cluster === 2 ? '#3b82f6' : p.cluster === 3 ? '#a855f7' : '#eab308';
+                      
+                      return (
+                        <circle
+                          key={p.player_id}
+                          cx={cx}
+                          cy={cy}
+                          r={isSelected ? 6 : 2.5}
+                          fill={isSelected ? '#D9622B' : clusterColor}
+                          stroke={isSelected ? '#white' : 'transparent'}
+                          strokeWidth={2}
+                          className="cursor-pointer transition hover:r-5 opacity-75"
+                          onClick={() => setSelectedPlayer(p.player_id)}
+                        />
+                      );
+                    })}
+
+                    {(() => {
+                      const target = players.find(p => p.player_id === selectedPlayer);
+                      if (!target) return null;
+                      const cx = 500 + (target.pca_x || 0) * 90;
+                      const cy = 200 - (target.pca_y || 0) * 90;
+                      return (
+                        <g>
+                          <circle cx={cx} cy={cy} r={14} fill="none" stroke="#D9622B" strokeWidth="1.5" className="animate-pulse" />
+                          <text x={cx + 18} y={cy + 4} fill="white" className="mono text-[0.55rem] font-bold uppercase">{target.name}</text>
+                        </g>
+                      );
+                    })()}
+                  </svg>
+                )}
+
+                {/* Plot legend */}
+                <div className="absolute bottom-4 left-4 flex flex-wrap gap-4 bg-black/80 border border-neutral-800 p-3 rounded">
+                  <div className="flex items-center gap-1.5 text-[0.6rem] mono">
+                    <span className="w-2 h-2 bg-[#D9622B] rounded-full" />
+                    <span>STRIKER</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[0.6rem] mono">
+                    <span className="w-2 h-2 bg-[#6ba642] rounded-full" />
+                    <span>PLAYMAKER</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[0.6rem] mono">
+                    <span className="w-2 h-2 bg-[#3b82f6] rounded-full" />
+                    <span>DEFENDER</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[0.6rem] mono">
+                    <span className="w-2 h-2 bg-[#a855f7] rounded-full" />
+                    <span>MIDFIELDER</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[0.6rem] mono">
+                    <span className="w-2 h-2 bg-[#eab308] rounded-full" />
+                    <span>FULLBACK</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 5. HIGHLIGHT DETECTOR PATH */}
+        {currentPath === '/highlights' && (
+          <div className="p-8 max-w-6xl w-full mx-auto space-y-8 animate-fade-in flex-grow">
+            <div className="border-b border-[#2A2A28] pb-4 flex justify-between items-end">
+              <div>
+                <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ RMS_VOLUME_SPIKE_CLIPPER ]</span>
+                <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">HIGHLIGHT TELEMETRY</h1>
+              </div>
+              <span className="mono text-[0.6rem] text-neutral-500">USDC_PRICE: 0.08 USDC</span>
+            </div>
+
+            <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+              
+              {highlightsData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
+                  <span className="mono text-[0.65rem] text-neutral-500">EXTRACTING DECIBEL SPIKES...</span>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* Waveform graph overlay */}
+                  <div className="border border-[#2A2A28] bg-black/40 p-4 rounded">
+                    <div className="mono text-[0.55rem] text-neutral-500 mb-2 uppercase">AUDIO_RMS_ENERGY (SPIKES LOCATED)</div>
+                    <svg className="w-full h-16" viewBox="0 0 1000 64" preserveAspectRatio="none">
+                      <path
+                        d={`M 0 32 ${Array.from({length: 100}, (_, i) => {
+                          const isPeak = i === 18 || i === 58 || i === 82;
+                          const height = isPeak ? 15 + Math.random() * 35 : 10 + Math.random() * 10;
+                          return `L ${i * 10} ${32 - height} L ${i * 10 + 5} ${32 + height}`;
+                        }).join(' ')} L 1000 32`}
+                        fill="none"
+                        stroke="rgba(217, 98, 43, 0.2)"
+                        strokeWidth="1.5"
+                      />
+                      <circle cx="180" cy="12" r="4" fill="#D9622B" />
+                      <line x1="180" y1="12" x2="180" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
+                      
+                      <circle cx="580" cy="8" r="4" fill="#D9622B" />
+                      <line x1="580" y1="8" x2="580" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
+                      
+                      <circle cx="820" cy="10" r="4" fill="#D9622B" />
+                      <line x1="820" y1="10" x2="820" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
+                    </svg>
+                  </div>
+
+                  {/* Highlights Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {highlightsData.map((clip) => (
+                      <div key={clip.id} className="border border-[#2A2A28] bg-[#0E0E0E] rounded overflow-hidden flex flex-col justify-between hover:border-[#D9622B]/30 transition">
+                        <div className="relative aspect-video bg-neutral-900">
+                          <video
+                            src={clip.video_url}
+                            controls
+                            poster={clip.thumbnail_url}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="p-4 space-y-2">
+                          <div className="flex justify-between items-center text-[0.65rem] mono text-neutral-500">
+                            <span>TIMESTAMP: {intToTime(clip.timestamp)}</span>
+                            <span>DURATION: {clip.duration}s</span>
+                          </div>
+                          <p className="text-[0.7rem] text-neutral-300 leading-relaxed font-jetbrains">
+                            {clip.description}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 6. DEVELOPERS DOCUMENTATION PATH */}
+        {currentPath === '/developers' && (
+          <div className="p-8 max-w-6xl w-full mx-auto space-y-8 animate-fade-in flex-grow">
+            <div className="border-b border-[#2A2A28] pb-4 flex justify-between items-end">
+              <div>
+                <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ AGENT_INTEGRATION_SDK ]</span>
+                <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">DEVELOPER PORTAL</h1>
+              </div>
+              <span className="mono text-[0.6rem] text-neutral-500">SPECIFICATION: MCP v1.0 &amp; Open Skills</span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              
+              {/* Instructions side panel */}
+              <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 space-y-6">
+                <div>
+                  <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ AGENT_SKILL_INSTALL ]</h3>
+                  <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed mb-4">
+                    Install the packaged skill into Claude Code or other compatible agent environments in one command.
+                  </p>
+                  
+                  <div className="bg-[#0E0E0E] border border-[#2A2A28] p-3 rounded text-[0.65rem] mono text-[#D9622B] font-bold select-all">
+                    npx skills add worldcup-analyst
+                  </div>
+                </div>
+
+                <div className="border-t border-[#2A2A28] pt-6 space-y-2">
+                  <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-2">INTEGRATION_STEPS</div>
+                  <ol className="list-decimal pl-4 text-[0.65rem] text-neutral-400 space-y-1.5 mono">
+                    <li>Add the skill package.</li>
+                    <li>Set EVM/SVM private key variables.</li>
+                    <li>Query the model context tools directly.</li>
+                  </ol>
+                </div>
+              </div>
+
+              {/* Code blocks reference */}
+              <div className="lg:col-span-2 border border-[#2A2A28] bg-[#171715]/40 rounded p-6 space-y-6">
+                <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ CLAUDE_DESKTOP_CONFIG_TEMPLATE ]</h3>
+                
+                <div className="bg-[#0E0E0E] border border-[#2A2A28] p-5 rounded font-mono text-[0.65rem] text-neutral-300 overflow-x-auto">
+                  <pre>{`{
+  "mcpServers": {
+    "fullback-analyst": {
+      "command": "npx",
+      "args": ["-y", "fullback-mcp-server"],
+      "env": {
+        "EVM_PRIVATE_KEY": "0x9ed482fC5A356964b0405D...",
+        "RESOURCE_SERVER_URL": "http://localhost:8000"
+      }
+    }
+  }
+}`}</pre>
+                </div>
+
+                <div className="border-t border-[#2A2A28] pt-6">
+                  <div className="mono text-[0.6rem] text-neutral-500 mb-2 uppercase">AVAILABLE_MCP_SCHEMAS:</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-[0.65rem] mono">
+                    <div className="border border-neutral-900 p-3 rounded">
+                      <div className="text-[#D9622B] font-bold">predict_outcome(match_id)</div>
+                      <div className="text-neutral-500 mt-1">Gated: 0.05 USDC</div>
+                    </div>
+                    <div className="border border-neutral-900 p-3 rounded">
+                      <div className="text-[#D9622B] font-bold">tactical_breakdown(match_id)</div>
+                      <div className="text-neutral-500 mt-1">Gated: 0.10 USDC</div>
+                    </div>
+                    <div className="border border-neutral-900 p-3 rounded">
+                      <div className="text-[#D9622B] font-bold">player_style_cluster(player_id)</div>
+                      <div className="text-neutral-500 mt-1">Gated: 0.01 USDC</div>
+                    </div>
+                    <div className="border border-neutral-900 p-3 rounded">
+                      <div className="text-[#D9622B] font-bold">generate_highlights(match_id)</div>
+                      <div className="text-neutral-500 mt-1">Gated: 0.08 USDC</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* Shared Footer component */}
+      <footer className="h-16 border-t border-[#2A2A28] bg-[#0E0E0E]/40 px-8 flex items-center justify-between text-[0.6rem] text-neutral-500 z-10">
+        <span className="mono">© 2026 FULL BACK // SUBMISSION FOR INJECTIVE GLOBAL CUP</span>
+        <span className="mono">SETTLEMENTS: CIRCLE CCTP EVM v2</span>
+      </footer>
+
+      {/* Gated 402 Paywall Modal Dialog */}
+      {paywallRequired && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 select-none font-jetbrains animate-fade-in">
+          <div className="max-w-md w-full border border-[#D9622B]/30 bg-[#171715] rounded p-6 shadow-2xl space-y-6 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-[2px] bg-[#D9622B]" />
+            
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 border border-neutral-800 bg-[#D9622B]/5 flex items-center justify-center text-[#D9622B] text-[1.2rem] font-bold">
+                ▲
+              </div>
+              <div className="space-y-1">
+                <h3 className="mono text-[0.85rem] font-bold text-white tracking-wider">HTTP 402 PAYMENT REQUIRED</h3>
+                <div className="mono text-[0.6rem] text-neutral-500">SCHEME: EIP-3009 (EXACT) · NETWORK: BASE SEPOLIA</div>
+              </div>
+            </div>
+
+            <div className="border border-[#2A2A28] bg-black/40 p-4 rounded space-y-3 text-[0.7rem] mono">
+              <div className="flex justify-between border-b border-neutral-900 pb-1.5">
+                <span className="text-neutral-500">RESOURCE_GATED:</span>
+                <span className="text-white truncate max-w-[200px]">{paywallRequired.resource}</span>
+              </div>
+              <div className="flex justify-between border-b border-neutral-900 pb-1.5">
+                <span className="text-neutral-500">PAY_TO_ADDRESS:</span>
+                <span className="text-white font-semibold">0x9ed482f...a924</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-neutral-500">REQUIRED_USDC:</span>
+                <span className="text-[#D9622B] font-bold">{parseFloat(paywallRequired.amount) / 1000000} USDC</span>
+              </div>
+            </div>
+
+            <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed">
+              This resource requires stablecoin permit micropayment on Base Sepolia. The AI Analyst will verify the settlement signature instantly.
+            </p>
+
+            {paymentStatus === '' ? (
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  onClick={() => {
+                    const rejectFn = paywallRequired.reject;
+                    setPaywallRequired(null);
+                    rejectFn(new Error('User aborted payment'));
+                  }}
+                  className="mono border border-neutral-800 text-neutral-400 py-2.5 hover:bg-neutral-900 transition tracking-wider text-[0.7rem] rounded"
+                >
+                  ABORT_QUERY
+                </button>
+                <button
+                  onClick={handlePaywallSettle}
+                  className="mono bg-[#D9622B] text-white py-2.5 hover:bg-[#D9622B]/90 transition tracking-wider text-[0.7rem] font-bold rounded cursor-pointer"
+                >
+                  AUTHORIZE_&_PAY
+                </button>
+              </div>
+            ) : (
+              <div className="border border-neutral-800 bg-[#0E0E0E] p-4 rounded text-center space-y-2">
+                {paymentStatus === 'signing' ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mx-auto mb-2" />
+                    <div className="mono text-[0.65rem] text-neutral-500 uppercase tracking-widest">SIGNING_EIP3009_PERMIT_PROOF...</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-green-500 text-[1.1rem] mb-1">✔ SETTLED</div>
+                    <div className="mono text-[0.55rem] text-neutral-500 uppercase truncate">TX: {paymentTx}</div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1396,3 +1529,10 @@ const intToTime = (secs: number): string => {
   const s = Math.floor(secs % 60);
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 };
+
+const IMAGE_ASSETS = [
+  'https://images.unsplash.com/photo-1459865264687-595d652de67e?auto=format&fit=crop&q=90&w=2600',
+  'https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&q=90&w=2000',
+  'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?auto=format&fit=crop&q=90&w=2000',
+  'https://images.unsplash.com/photo-1486286701208-1d58e9338013?auto=format&fit=crop&q=90&w=2000'
+];
