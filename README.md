@@ -112,9 +112,91 @@ External agents ─┘                 └──▶ Premium tools ──▶ x402
 
 ## Submission checklist
 
-- [x] Clean, documented GitHub repo
-- [ ] README explains why each Injective technology is used, not just that it's used
+- [x] README explains why each Injective technology is used, not just that it's used
 - [ ] Demo video shows the full free → paywall → cross-chain payment → answer loop
-- [ ] Free tier works standalone, no wallet required
-- [ ] Agent Skill installable independently of the dashboard
+- [x] Free tier works standalone, no wallet required
+- [x] Agent Skill installable independently of the dashboard
 - [ ] Typeform submission before the July 19 deadline
+
+---
+
+## Technical Architecture
+
+```mermaid
+graph TD
+    Client[User / Agentic Client] -->|1. Request Gated Tool / API| MCP[Node.js MCP Server / HTTP Gateway]
+    MCP -->|2. Query Gated Endpoint| Fast[Python FastAPI Microservice]
+    Fast -->|3. Challenge: 402 Payment Required| MCP
+    MCP -->|4. Signs EIP-3009 Permit / Transfer| Circle[Circle CCTP Protocol]
+    Circle -->|5. Confirms Settlement| MCP
+    MCP -->|6. Retry Gated Endpoint with payment-signature| Fast
+    Fast -->|7. Calls LLM with telemetry| Gemini[Gemini API]
+    Fast -->|8. Returns Data science insight| MCP
+    MCP -->|9. Tool Response| Client
+```
+
+---
+
+## Why Injective & Circle Technology Stack?
+
+### 1. x402 Micropayments
+**Standardizes pay-per-query AI.** Instead of monthly subscriptions or API key gates, x402 uses standard HTTP 402 headers to charge clients dynamically in USDC. This allows AI agents to transact autonomously.
+
+### 2. Circle CCTP (Cross-Chain Transfer Protocol)
+**Solves multi-chain friction.** AI developers and fans shouldn't need to manually bridge funds to Injective to query the server. CCTP burns USDC on the client source chain (like Ethereum or Solana) and mints it on the target chain (Base/Injective) in a single unified flow.
+
+### 3. Model Context Protocol (MCP)
+**Unifies human and machine execution.** The analyst is packaged as an MCP server. This means any LLM client (Cursor, Claude Desktop, custom agents) can natively discover and call FULL BACK tools.
+
+### 4. Agent Skills
+**Modular reusability.** By distributing the analyst as an installable skill under the Open Agent Skills standard, other developers can add sports-analyst telemetry to their own agents with a single command.
+
+---
+
+## Local Setup Instructions
+
+### 1. Requirements
+*   **Node.js**: v20+
+*   **Python**: v3.10+
+*   **npm** / **pip**
+
+### 2. Environment Setup
+Clone the repository and copy the template configuration:
+```bash
+cp .env.example .env
+```
+Fill in the configuration details inside `.env`:
+*   `SPORTS_DATA_API_KEY`: Your football API key.
+*   `INJECTIVE_PRIVATE_KEY` & `X402_SECRET_KEY`: Wallet private key to sign/handle payments.
+*   `GEMINI_API_KEY`: API key for Gemini models.
+
+### 3. Run the Python Data Science Service
+```bash
+cd python-service
+# Install dependencies
+pip install -r requirements.txt
+# Run the FastAPI server
+python main.py
+```
+This runs the microservice on `http://localhost:8000`.
+
+### 4. Run the Node MCP Server
+```bash
+cd mcp-server
+# Install dependencies
+npm install
+# Compile TypeScript and run
+npm run start
+```
+This starts the Stdio MCP server bridge.
+
+### 5. Run the Frontend Dashboard
+From the root directory:
+```bash
+# Install packages
+npm install
+# Run local Vite dashboard
+npm run dev
+```
+Open `http://localhost:5173` in your browser. Click **ENTER THE FIELD** to view the live dashboard.
+
