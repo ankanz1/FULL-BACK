@@ -1,0 +1,266 @@
+player_id,name,nationality,position,market_value_m,minutes_played,goals,assists,key_passes,tackles,interceptions,pass_accuracy
+PL001,Erling Haaland,Norway,Attacker,180,2800,32,5,12,4,2,78.5
+PL002,Kylian Mbappé,France,Attacker,180,2600,27,8,38,8,4,82.1
+PL003,Harry Kane,England,Attacker,110,2900,25,10,35,10,5,80.4
+PL004,Mohamed Salah,Egypt,Attacker,110,2700,22,11,48,12,6,79.8
+PL005,Vinicius Junior,Brazil,Attacker,150,2500,18,9,45,15,8,81.5
+PL006,Bukayo Saka,England,Attacker,130,2800,16,12,55,22,14,83.2
+PL007,Lamine Yamal,Spain,Attacker,120,2400,10,14,52,18,10,84.1
+PL008,Lautaro Martínez,Argentina,Attacker,110,2500,21,4,22,14,7,75.3
+PL009,Robert Lewandowski,Poland,Attacker,15,2600,20,5,20,6,3,77.2
+PL010,Antoine Griezmann,France,Attacker,25,2800,12,8,62,35,20,83.9
+PL011,Son Heung-min,South Korea,Attacker,45,2600,14,6,40,15,8,80.6
+PL012,Rafael Leão,Portugal,Attacker,75,2300,11,8,30,10,5,78.9
+PL013,Phil Foden,England,Attacker,150,2500,16,10,50,18,11,86.4
+PL014,Jamal Musiala,Germany,Attacker,130,2400,12,9,48,25,15,85.2
+PL015,Florian Wirtz,Germany,Attacker,130,2600,14,15,68,20,12,86.8
+PL016,Cole Palmer,England,Attacker,90,2500,20,12,58,18,10,83.5
+PL017,Victor Osimhen,Nigeria,Attacker,100,2100,15,3,15,8,4,72.8
+PL018,Neymar Jr,Brazil,Attacker,30,1200,8,6,28,6,3,82.5
+PL019,Lionel Messi,Argentina,Attacker,30,2000,15,12,60,5,2,85.9
+PL020,Cristiano Ronaldo,Portugal,Attacker,15,2200,18,4,18,4,1,78.2
+PL021,Kevin De Bruyne,Belgium,Midfielder,50,2200,6,16,85,24,12,87.5
+PL022,Jude Bellingham,England,Midfielder,180,2700,17,8,42,45,32,86.9
+PL023,Rodri,Spain,Midfielder,130,3000,8,7,35,65,48,92.5
+PL024,Declan Rice,England,Midfielder,120,2900,7,8,30,70,52,89.2
+PL025,Martin Ødegaard,Norway,Midfielder,110,2800,9,10,82,30,18,86.3
+PL026,Bruno Fernandes,Portugal,Midfielder,70,3000,10,12,95,40,22,79.9
+PL027,Federico Valverde,Uruguay,Midfielder,120,2900,7,6,38,55,36,88.4
+PL028,Aurelien Tchouameni,France,Midfielder,100,2500,3,2,18,58,46,91.2
+PL029,Eduardo Camavinga,France,Midfielder,100,2300,2,4,25,62,38,89.9
+PL030,Granit Xhaka,Switzerland,Midfielder,20,2800,4,6,45,42,30,90.5
+PL031,Alexis Mac Allister,Argentina,Midfielder,75,2600,6,7,40,58,35,87.9
+PL032,Dominik Szoboszlai,Hungary,Midfielder,75,2500,7,6,48,32,20,83.4
+PL033,Ilkay Gündogan,Germany,Midfielder,15,2600,6,8,52,30,18,88.6
+PL034,Frenkie de Jong,Netherlands,Midfielder,70,2100,2,4,28,38,25,91.8
+PL035,Pedri,Spain,Midfielder,80,2000,4,6,42,35,22,90.1
+PL036,Gavi,Spain,Midfielder,90,1800,3,3,20,52,28,87.3
+PL037,Vitinha,Portugal,Midfielder,55,2500,5,5,36,40,28,91.5
+PL038,Hakan Çalhanoglu,Turkey,Midfielder,45,2700,11,4,55,38,26,89.7
+PL039,Nicolo Barella,Italy,Midfielder,80,2600,4,7,42,48,30,85.8
+PL040,Toni Kroos,Germany,Midfielder,10,2200,1,8,75,22,18,93.8
+PL041,Virgil van Dijk,Netherlands,Defender,30,2800,2,2,8,48,42,90.2
+PL042,Rúben Dias,Portugal,Defender,80,2700,1,1,5,52,38,91.9
+PL043,William Saliba,France,Defender,80,2900,2,1,6,50,40,92.3
+PL044,Gabriel Magalhães,Brazil,Defender,70,2800,4,1,4,48,35,88.9
+PL045,John Stones,England,Defender,38,2000,1,2,12,36,28,93.1
+PL046,Alessandro Bastoni,Italy,Defender,70,2600,1,4,20,42,36,89.5
+PL047,Ronald Araujo,Uruguay,Defender,70,2200,1,1,4,55,42,86.4
+PL048,Josko Gvardiol,Croatia,Defender,75,2600,4,3,18,45,38,88.7
+PL049,Antonio Rüdiger,Germany,Defender,25,2800,2,1,8,52,44,89.9
+PL050,Trent Alexander-Arnold,England,Defender,70,2500,3,9,72,32,24,80.1
+PL051,Achraf Hakimi,Morocco,Defender,65,2600,4,6,35,46,32,84.6
+PL052,Alphonso Davies,Canada,Defender,50,2400,2,5,28,40,25,85.3
+PL053,Theo Hernandez,Italy,Defender,60,2600,5,4,32,45,28,83.8
+PL054,Kyle Walker,England,Defender,15,2500,0,2,15,38,30,88.2
+PL055,Carvajal,Spain,Defender,12,2600,2,4,22,50,38,85.5
+PL056,Jules Koundé,France,Defender,50,2700,1,3,18,48,35,89.1
+PL057,Ben White,England,Defender,55,2800,2,4,25,52,32,86.7
+PL058,Jeremie Frimpong,Netherlands,Defender,50,2400,9,8,40,30,18,82.9
+PL059,Alejandro Grimaldo,Spain,Defender,45,2800,10,13,65,35,22,84.8
+PL060,Piero Hincapié,Ecuador,Defender,40,2400,1,2,10,48,38,87.2
+PL061,Hugo Silva,Brazil,Defender,32.9,2371,1,1,9,49,44,73.3
+PL062,Thomas Santos,France,Attacker,135.3,2488,13,10,45,24,13,97.8
+PL063,Alex Kovac,Argentina,Defender,34.6,1658,1,1,11,32,25,84.3
+PL064,Diego Lopes,Brazil,Defender,59.5,2757,0,0,4,67,38,75.8
+PL065,Thomas De Jong,Spain,Attacker,131.3,3518,30,9,34,12,3,75.7
+PL066,Enzo Müller,England,Defender,40.1,2040,0,1,10,45,31,82.7
+PL067,Mateo Jones,Netherlands,Defender,16.9,2957,0,1,18,39,33,78.1
+PL068,Diego Dubois,France,Midfielder,63.4,2543,10,10,99,49,20,70.9
+PL069,Robin Garcia,Netherlands,Midfielder,16.5,3163,4,6,57,31,16,92.0
+PL070,Arthur Lopes,Italy,Midfielder,80.1,1484,2,4,28,32,27,77.5
+PL071,Diego Silva,Portugal,Attacker,53.2,3186,12,6,32,18,9,74.1
+PL072,Julian Dubois,England,Midfielder,76.0,2072,5,8,52,50,29,72.5
+PL073,David Jones,France,Defender,45.3,3435,2,3,24,38,37,95.9
+PL074,Robin Lopes,Italy,Defender,69.3,2948,2,1,7,57,44,100.0
+PL075,Daniel Fernandez,Argentina,Defender,92.8,2815,1,0,4,51,42,74.1
+PL076,Enzo Mendes,Netherlands,Attacker,148.7,1930,11,16,56,15,15,89.3
+PL077,Robin Gomez,Brazil,Attacker,78.9,1895,19,11,56,20,11,99.7
+PL078,Oliver Kovac,Brazil,Attacker,123.2,2067,17,11,37,9,5,91.8
+PL079,Felipe Schmidt,Germany,Midfielder,82.0,2989,2,5,31,74,30,89.4
+PL080,Oliver Mendes,Portugal,Defender,43.3,1893,0,3,21,41,39,97.3
+PL081,Robin Dubois,Portugal,Defender,70.1,2408,1,1,4,44,29,91.4
+PL082,Mateo Santos,Belgium,Attacker,37.4,2109,14,6,33,11,9,72.4
+PL083,Gabriel Garcia,Spain,Attacker,106.4,3045,25,12,28,11,4,77.0
+PL084,Sandro Garcia,Brazil,Midfielder,16.1,3003,4,4,46,42,23,85.0
+PL085,Thomas Rossi,Portugal,Defender,50.3,2696,2,3,32,61,32,92.5
+PL086,Hugo Dubois,Spain,Attacker,13.6,2714,20,3,15,3,0,84.1
+PL087,Robin Jansen,Spain,Midfielder,17.4,3139,4,7,45,21,20,93.5
+PL088,Alex Lopes,France,Defender,56.3,1937,1,4,20,50,37,76.9
+PL089,David Rossi,Italy,Attacker,127.6,3415,30,12,28,8,3,89.4
+PL090,Leo Jones,Germany,Midfielder,11.5,2828,1,9,53,25,16,100.0
+PL091,Marc Schmidt,Germany,Attacker,28.6,867,7,4,35,5,3,94.8
+PL092,Julian Bianchi,Argentina,Attacker,167.6,3168,34,6,41,7,5,83.3
+PL093,Arthur Martin,Brazil,Attacker,113.5,3225,15,4,19,16,6,89.9
+PL094,Bruno Smith,England,Midfielder,99.2,3150,6,12,83,33,20,92.2
+PL095,Enzo Kovac,Portugal,Midfielder,104.9,2745,2,2,18,63,41,98.4
+PL096,Julian Gomez,Germany,Attacker,16.0,2411,22,4,20,5,3,71.1
+PL097,Bruno Müller,Brazil,Midfielder,106.2,2447,2,1,17,71,54,79.2
+PL098,Klaus Müller,Netherlands,Attacker,28.0,2382,17,13,50,4,1,77.1
+PL099,Enzo Fernandez,Brazil,Midfielder,9.7,2371,0,8,74,18,19,75.2
+PL100,Alex Jones,Portugal,Defender,60.9,3186,3,6,61,38,23,89.8
+PL101,Gabriel Kovac,Netherlands,Midfielder,106.2,2222,3,3,20,62,28,100.0
+PL102,Arthur Jones,England,Midfielder,113.6,1992,2,3,21,59,42,80.4
+PL103,Felipe Garcia,Germany,Midfielder,42.8,1845,6,17,62,22,12,84.6
+PL104,Alex Bianchi,Italy,Defender,17.4,2626,0,2,17,35,21,83.0
+PL105,Felipe Müller,Netherlands,Defender,86.9,2581,3,2,16,49,44,96.7
+PL106,Leo Müller,Spain,Defender,45.6,3483,10,14,48,33,26,74.0
+PL107,Sandro Smith,Portugal,Midfielder,108.0,2527,11,8,104,28,21,85.3
+PL108,Daniel Jones,France,Attacker,116.6,3155,24,12,60,9,4,68.7
+PL109,Hugo Webber,France,Midfielder,88.4,2545,5,6,42,74,39,97.7
+PL110,David Webber,Spain,Attacker,192.8,3314,25,9,28,8,4,69.0
+PL111,Gabriel Schmidt,Italy,Defender,13.4,2702,1,4,24,37,41,68.8
+PL112,Robin Schmidt,Belgium,Defender,58.4,2385,6,3,25,36,28,88.8
+PL113,Felipe Alves,Netherlands,Defender,49.3,2869,2,4,23,50,21,83.6
+PL114,Gabriel Bianchi,Spain,Midfielder,51.4,2491,4,4,32,34,24,95.0
+PL115,Lucas Santos,Argentina,Midfielder,106.1,1352,3,2,23,57,30,87.0
+PL116,Bruno Rossi,Brazil,Defender,79.1,2953,1,1,5,56,34,83.1
+PL117,Julian Kovac,Portugal,Defender,59.3,2247,1,0,3,54,47,100.0
+PL118,David Schmidt,Spain,Midfielder,90.6,2282,3,6,47,37,21,70.5
+PL119,Leo Alves,Brazil,Defender,32.0,1414,0,1,10,46,23,100.0
+PL120,Enzo Bianchi,Portugal,Defender,59.8,2720,5,3,37,57,21,75.4
+PL121,Alex Müller,Belgium,Defender,26.0,2998,2,0,9,45,46,87.3
+PL122,Mateo Müller,France,Midfielder,11.8,1670,1,8,64,16,15,95.8
+PL123,Alex Fernandez,Spain,Attacker,193.6,2749,23,4,10,4,1,70.1
+PL124,Hugo Lopes,Spain,Midfielder,89.0,1973,2,1,13,68,48,100.0
+PL125,Hugo Fernandez,England,Midfielder,107.5,2575,2,4,24,46,27,87.5
+PL126,Arthur Silva,Argentina,Midfielder,66.9,3320,4,7,53,62,33,77.9
+PL127,Marc Alves,Italy,Defender,25.2,2702,1,1,7,61,56,88.8
+PL128,Sandro Schmidt,England,Midfielder,205.8,2424,18,6,53,53,32,85.3
+PL129,Oliver Santos,Netherlands,Defender,79.1,1751,3,8,52,32,25,80.1
+PL130,Mateo Smith,France,Defender,22.7,2180,1,1,7,37,47,100.0
+PL131,Felipe Silva,Spain,Attacker,15.3,1663,23,4,17,3,1,78.1
+PL132,Arthur Gomez,Brazil,Midfielder,17.0,3349,5,8,48,37,18,100.0
+PL133,Klaus Jansen,England,Defender,45.1,2087,0,2,12,47,29,88.5
+PL134,Felipe Lopes,England,Midfielder,171.2,3401,20,10,35,41,38,83.8
+PL135,Robin Bianchi,Brazil,Defender,71.6,2855,4,3,17,32,38,91.9
+PL136,Diego Schmidt,England,Defender,50.5,2630,1,2,19,38,34,100.0
+PL137,Oliver Garcia,Argentina,Midfielder,11.4,2665,1,7,66,24,20,100.0
+PL138,Enzo Jones,Netherlands,Midfielder,10.5,2755,1,9,72,16,19,100.0
+PL139,David Silva,France,Attacker,36.8,3061,12,5,31,15,8,90.0
+PL140,Oliver Müller,Netherlands,Defender,53.7,2696,1,2,19,46,38,100.0
+PL141,David Lopes,Germany,Defender,43.2,2316,8,8,43,28,15,94.4
+PL142,Oliver Webber,Argentina,Attacker,84.9,2193,22,8,69,16,7,95.7
+PL143,Gabriel Alves,France,Defender,51.0,3476,11,10,76,29,17,76.3
+PL144,Hugo Mendes,France,Defender,27.7,2700,2,2,6,42,48,78.5
+PL145,Felipe Rossi,England,Defender,65.8,3245,4,5,41,45,37,92.9
+PL146,Oliver Lopes,England,Defender,47.3,3170,0,3,17,52,38,92.1
+PL147,Thomas Alves,Spain,Attacker,97.2,2953,10,17,43,13,11,97.9
+PL148,Alex Schmidt,Portugal,Defender,68.5,3422,0,0,3,64,29,90.2
+PL149,Bruno Dubois,Netherlands,Midfielder,138.5,3169,8,6,48,47,40,78.4
+PL150,Daniel Schmidt,Netherlands,Attacker,107.3,2301,24,13,42,15,12,98.5
+PL151,Julian Müller,Belgium,Attacker,154.5,2044,14,15,64,18,16,85.0
+PL152,Thomas Kovac,Brazil,Attacker,144.3,2815,12,7,61,32,15,95.4
+PL153,Lucas Dubois,Brazil,Defender,64.5,3404,1,0,4,36,45,93.3
+PL154,Diego Rossi,Netherlands,Midfielder,75.4,1990,6,8,29,67,42,88.7
+PL155,Lucas Mendes,France,Defender,96.0,3262,0,0,5,50,47,85.4
+PL156,Leo Jansen,Brazil,Attacker,157.5,2628,20,8,47,13,8,79.2
+PL157,Felipe Smith,Spain,Defender,11.7,3205,1,4,20,56,33,79.1
+PL158,Enzo Garcia,Brazil,Attacker,125.6,1894,20,10,46,15,8,75.9
+PL159,Daniel Gomez,Germany,Midfielder,137.7,3284,8,6,34,57,29,93.9
+PL160,Hugo Rossi,Belgium,Defender,13.7,2393,2,4,26,60,48,96.4
+PL161,Arthur De Jong,Brazil,Attacker,87.6,2094,8,6,32,7,5,93.8
+PL162,Klaus Smith,France,Defender,71.3,2527,3,2,16,56,40,100.0
+PL163,Gabriel Mendes,Italy,Attacker,48.1,2244,15,5,38,12,9,68.1
+PL164,Klaus De Jong,England,Midfielder,61.4,2342,7,4,42,26,15,75.2
+PL165,Lucas Alves,Argentina,Attacker,120.9,2013,19,4,22,16,8,62.4
+PL166,Lucas Fernandez,England,Midfielder,116.8,3043,3,2,20,55,35,73.7
+PL167,Gabriel Fernandez,Spain,Attacker,51.0,3254,10,7,33,15,8,77.2
+PL168,Sandro Jones,France,Defender,70.0,2082,4,2,18,55,34,96.8
+PL169,Julian Martin,Netherlands,Attacker,104.1,2427,16,2,17,7,4,80.4
+PL170,Sandro Dubois,Argentina,Midfielder,48.8,2158,6,18,89,21,8,86.2
+PL171,Daniel De Jong,Argentina,Attacker,91.4,3290,26,11,48,11,6,89.1
+PL172,Leo Mendes,Netherlands,Midfielder,14.7,3085,7,10,39,32,13,96.0
+PL173,Daniel Rossi,Portugal,Attacker,52.5,2424,16,6,29,16,7,75.1
+PL174,Oliver De Jong,Spain,Defender,63.1,3390,5,1,3,35,38,100.0
+PL175,Oliver Dubois,Portugal,Defender,83.0,3409,0,0,5,61,41,100.0
+PL176,Alex Santos,Brazil,Attacker,122.8,2569,12,9,69,21,11,71.1
+PL177,Hugo Santos,France,Attacker,33.3,2402,18,8,54,5,1,81.7
+PL178,Gabriel Martin,Germany,Attacker,81.6,1670,10,9,38,10,5,87.9
+PL179,Robin Smith,Germany,Defender,47.4,3043,2,4,24,37,25,100.0
+PL180,Gabriel Dubois,Brazil,Defender,57.5,1755,1,4,35,45,25,72.5
+PL181,Marc Jansen,Italy,Defender,24.5,2822,2,0,9,61,54,100.0
+PL182,Thomas Bianchi,Spain,Midfielder,143.7,2682,5,10,36,76,61,76.3
+PL183,Robin Fernandez,Spain,Defender,26.2,3481,1,0,6,65,46,87.1
+PL184,Thomas Gomez,France,Attacker,116.1,2898,16,13,47,12,6,82.2
+PL185,Alex Silva,Portugal,Attacker,31.4,1688,14,13,45,6,1,86.8
+PL186,Klaus Lopes,Germany,Defender,52.5,3182,2,5,32,52,29,70.0
+PL187,Daniel Lopes,Netherlands,Attacker,102.9,3148,29,11,45,9,4,68.7
+PL188,David Smith,Germany,Attacker,89.9,2377,18,12,35,12,5,72.5
+PL189,Daniel Mendes,France,Attacker,34.4,1798,11,11,74,5,2,82.0
+PL190,Robin Rossi,England,Midfielder,87.7,2528,8,6,35,33,23,84.9
+PL191,David De Jong,Italy,Defender,78.3,3278,1,0,5,56,49,96.5
+PL192,Mateo Garcia,Netherlands,Attacker,32.1,1132,8,6,22,4,3,88.4
+PL193,Leo Garcia,Netherlands,Attacker,98.4,3152,22,12,25,7,4,76.3
+PL194,Enzo Webber,Portugal,Defender,21.4,2576,1,0,10,37,35,90.5
+PL195,Arthur Jansen,France,Attacker,119.0,2071,22,4,28,11,5,62.5
+PL196,Diego Garcia,France,Defender,56.2,3073,11,8,45,30,15,76.3
+PL197,Marc Rossi,Portugal,Defender,70.2,2009,0,3,23,30,37,84.8
+PL198,David Bianchi,Netherlands,Attacker,180.0,2828,18,10,53,11,10,86.1
+PL199,Klaus Rossi,Brazil,Midfielder,17.0,3352,4,6,52,32,30,100.0
+PL200,Leo De Jong,Portugal,Midfielder,60.6,1876,2,3,35,47,30,82.6
+PL201,Marc Webber,Argentina,Midfielder,17.6,2060,6,9,55,36,18,100.0
+PL202,Mateo Webber,Spain,Attacker,117.8,2314,16,12,39,27,14,87.9
+PL203,Mateo Martin,Italy,Defender,37.1,1981,0,2,10,40,31,100.0
+PL204,Daniel Santos,Belgium,Attacker,15.4,2317,19,4,16,4,2,73.6
+PL205,Thomas Martin,Netherlands,Midfielder,135.0,3654,7,4,30,71,35,100.0
+PL206,Diego Jones,Brazil,Midfielder,13.3,2370,4,7,63,32,17,89.9
+PL207,Daniel Bianchi,Spain,Defender,66.2,2068,1,0,4,40,42,95.5
+PL208,Gabriel Müller,Portugal,Defender,50.9,3341,4,4,28,56,32,73.7
+PL209,Klaus Mendes,Belgium,Midfielder,57.3,2346,8,11,92,42,22,74.4
+PL210,Marc Bianchi,Argentina,Midfielder,59.8,2515,5,14,101,24,13,80.5
+PL211,Bruno De Jong,Belgium,Midfielder,134.2,3292,7,4,37,70,42,98.2
+PL212,Marc Santos,Argentina,Midfielder,78.9,2786,7,5,44,41,44,74.2
+PL213,Sandro Gomez,France,Midfielder,86.1,2562,1,4,31,75,43,74.2
+PL214,Julian Lopes,Spain,Midfielder,65.1,2304,2,3,22,47,22,86.4
+PL215,Robin Kovac,Italy,Defender,37.7,2072,1,2,10,37,28,100.0
+PL216,Daniel Dubois,Portugal,Defender,55.0,2268,5,3,30,38,27,73.8
+PL217,Felipe Jansen,Italy,Attacker,25.6,1283,8,5,30,6,3,67.7
+PL218,Leo Silva,Spain,Defender,83.0,3602,3,1,4,47,38,98.0
+PL219,David Mendes,France,Midfielder,58.2,1658,6,16,96,30,14,76.1
+PL220,Mateo Bianchi,England,Defender,44.6,1948,1,2,8,34,33,90.8
+PL221,Klaus Fernandez,Spain,Defender,10.9,3081,1,4,23,56,26,79.9
+PL222,Oliver Gomez,Germany,Midfielder,10.1,1654,1,6,58,19,15,84.8
+PL223,Arthur Kovac,Italy,Midfielder,92.1,2607,1,4,27,45,29,83.0
+PL224,Hugo De Jong,Netherlands,Defender,36.0,1665,1,1,11,46,25,100.0
+PL225,Thomas Müller,Portugal,Defender,28.7,2097,1,1,5,54,32,91.6
+PL226,Bruno Lopes,Argentina,Attacker,129.0,2242,16,7,41,18,8,86.8
+PL227,Leo Santos,Germany,Midfielder,19.3,2907,4,6,39,29,25,72.5
+PL228,Daniel Garcia,Italy,Midfielder,101.6,1840,3,2,17,50,37,77.9
+PL229,Oliver Fernandez,France,Midfielder,137.7,3607,6,8,32,71,56,83.8
+PL230,Thomas Silva,France,Attacker,16.5,3346,19,5,19,5,2,76.0
+PL231,Julian Schmidt,Netherlands,Attacker,24.4,1315,8,7,34,5,2,85.6
+PL232,Thomas Lopes,Belgium,Midfielder,88.7,2801,1,4,21,73,43,83.4
+PL233,Alex De Jong,England,Attacker,118.3,2688,14,17,54,22,12,71.1
+PL234,Alex Gomez,Argentina,Midfielder,43.0,2036,6,15,102,21,13,98.2
+PL235,Klaus Dubois,Argentina,Midfielder,86.0,1535,2,2,19,47,28,98.8
+PL236,Sandro De Jong,Belgium,Defender,59.1,1914,1,3,13,62,34,79.9
+PL237,Arthur Rossi,Italy,Attacker,15.1,2196,13,5,17,4,1,74.2
+PL238,Bruno Jones,Belgium,Attacker,120.6,2058,25,10,39,8,4,71.7
+PL239,Sandro Jansen,Portugal,Midfielder,99.5,1787,3,3,19,59,25,74.7
+PL240,Marc Lopes,France,Midfielder,89.7,3185,7,7,35,38,14,66.9
+PL241,Thomas Garcia,Netherlands,Defender,16.2,1763,0,1,16,41,32,87.6
+PL242,Lucas Lopes,France,Attacker,183.7,1838,27,6,48,5,4,87.8
+PL243,Thomas Smith,Germany,Attacker,26.2,2384,10,9,46,44,19,75.3
+PL244,Oliver Bianchi,Brazil,Attacker,123.6,2759,17,13,41,26,15,77.6
+PL245,Julian Webber,England,Attacker,128.7,1892,10,18,84,20,8,100.0
+PL246,Bruno Bianchi,England,Attacker,96.4,2560,18,13,68,20,7,91.7
+PL247,Hugo Gomez,Netherlands,Attacker,98.2,2013,23,11,50,15,5,84.1
+PL248,Gabriel De Jong,Brazil,Attacker,145.5,3158,11,9,61,23,16,77.1
+PL249,Lucas De Jong,Brazil,Attacker,127.1,3239,12,9,52,22,14,70.0
+PL250,Oliver Silva,Italy,Defender,45.8,2518,0,3,22,61,36,77.3
+PL251,Arthur Alves,Netherlands,Attacker,12.9,1760,15,3,21,3,1,85.1
+PL252,Gabriel Smith,Italy,Midfielder,78.7,2031,2,6,50,44,36,83.7
+PL253,Sandro Müller,Belgium,Attacker,17.7,1805,15,5,23,3,1,77.9
+PL254,Arthur Bianchi,Germany,Midfielder,104.1,3525,7,12,66,34,12,94.1
+PL255,David Garcia,Italy,Midfielder,112.8,2708,1,3,27,52,41,97.6
+PL256,Diego Müller,Portugal,Attacker,148.8,2351,18,11,50,15,9,76.9
+PL257,Enzo Schmidt,England,Midfielder,88.6,2845,3,7,30,61,33,82.4
+PL258,Hugo Jansen,Portugal,Attacker,160.0,3214,33,5,9,3,1,84.1
+PL259,Daniel Silva,Germany,Attacker,24.8,2456,15,6,74,39,18,78.6
+PL260,Diego Kovac,Germany,Defender,57.9,1598,1,0,3,42,49,100.0
+PL261,Sandro Lopes,Germany,Attacker,43.7,2540,16,6,32,16,7,88.3
+PL262,Bruno Gomez,France,Midfielder,95.6,2582,1,4,29,45,28,100.0
+PL263,Robin Santos,Spain,Defender,94.9,2575,1,0,4,45,38,80.2
+PL264,Gabriel Webber,France,Defender,37.5,2185,7,11,52,39,22,82.0
+PL265,Robin De Jong,Portugal,Attacker,38.5,2310,13,4,36,10,6,90.8
