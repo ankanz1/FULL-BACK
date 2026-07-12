@@ -1,7 +1,7 @@
 # FULL BACK
 ### An AI analyst that has the fan's back — on and off the pitch
 
-*Submission for The Injective Global Cup, July 2026*
+
 
 ---
 <img width="640" height="220" alt="full-back-logo-primary-v2" src="https://github.com/user-attachments/assets/b240a25e-88f7-4972-afd3-7082e17e856a" />
