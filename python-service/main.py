@@ -347,6 +347,167 @@ team_forms_db = {
     "ENG": "Form: WWDWD. Avg goals scored: 2.0/match, conceded: 1.0/match.",
 }
 
+# API Sports Team ID Map
+API_SPORTS_TEAM_IDS = {
+    "USA": 33,
+    "COL": 42,
+    "GER": 50,
+    "JPN": 47,
+    "ARG": 40,
+    "FRA": 49,
+    "MAR": 34,
+    "ESP": 35,
+    "ITA": 45,
+    "BRA": 66,
+    "CRO": 36,
+    "MUN": 33,
+    "ARS": 42,
+    "MCI": 50,
+    "LIV": 40,
+    "CHE": 49,
+    "TOT": 47,
+    "MAN": 33,
+    "FUL": 36,
+    "NEW": 34,
+    "AVL": 66,
+    "BHA": 51,
+    "WHU": 48,
+    "CRY": 52,
+    "BOU": 35,
+    "EVE": 45,
+    "BRE": 55,
+    "NFO": 65,
+    "LEI": 46,
+    "WOL": 39,
+    "SOU": 41,
+    "IPS": 57
+}
+
+# Map mock IDs to real API-Sports Premier League fixture IDs
+MOCK_MATCH_TO_REAL_FIXTURE_ID = {
+    "M001": 1208021,
+    "M002": 1208022,
+    "M003": 1208028,
+    "M004": 1208023,
+    "M005": 1208024,
+    "M006": 1208025
+}
+
+def get_stat_value_py(statistics, type_name):
+    if not statistics or not isinstance(statistics, list):
+        return {"home": 0, "away": 0}
+    home_stats = statistics[0].get("statistics", []) if len(statistics) > 0 else []
+    away_stats = statistics[1].get("statistics", []) if len(statistics) > 1 else []
+    
+    home_val = next((s.get("value") for s in home_stats if s.get("type") == type_name), 0)
+    away_val = next((s.get("value") for s in away_stats if s.get("type") == type_name), 0)
+    
+    def parse_val(v):
+        if isinstance(v, str):
+            if "%" in v:
+                v = v.replace("%", "")
+            try:
+                return int(v)
+            except ValueError:
+                return 0
+        if v is None:
+            return 0
+        return int(v)
+        
+    return {"home": parse_val(home_val), "away": parse_val(away_val)}
+
+def fetch_real_match_stats(match_id: str):
+    api_key = os.getenv("API_SPORTS_API_KEY")
+    fixture_id = MOCK_MATCH_TO_REAL_FIXTURE_ID.get(match_id)
+    if not fixture_id:
+        try:
+            fixture_id = int(match_id)
+        except ValueError:
+            fixture_id = None
+            
+    if fixture_id and api_key:
+        try:
+            url = f"https://v3.football.api-sports.io/fixtures?id={fixture_id}"
+            headers = {"x-apisports-key": api_key}
+            r = requests.get(url, headers=headers, timeout=5)
+            if r.status_code == 200:
+                data = r.json()
+                fixture = data.get("response", [])[0] if data.get("response") else None
+                if fixture:
+                    stats = fixture.get("statistics", [])
+                    return {
+                        "match_id": match_id,
+                        "home_team": {
+                            "id": str(fixture["teams"]["home"]["id"]),
+                            "name": fixture["teams"]["home"]["name"],
+                            "code": fixture["teams"]["home"]["name"][:3].upper()
+                        },
+                        "away_team": {
+                            "id": str(fixture["teams"]["away"]["id"]),
+                            "name": fixture["teams"]["away"]["name"],
+                            "code": fixture["teams"]["away"]["name"][:3].upper()
+                        },
+                        "status": fixture["fixture"]["status"].get("long", "Scheduled"),
+                        "score": {
+                            "home": fixture["goals"].get("home") if fixture["goals"].get("home") is not None else 0,
+                            "away": fixture["goals"].get("away") if fixture["goals"].get("away") is not None else 0
+                        },
+                        "stats": {
+                            "possession": get_stat_value_py(stats, "Ball Possession"),
+                            "shots": get_stat_value_py(stats, "Total Shots"),
+                            "shots_on_target": get_stat_value_py(stats, "Shots on Target"),
+                            "passes": get_stat_value_py(stats, "Total Passes"),
+                            "pass_accuracy": get_stat_value_py(stats, "Passes %"),
+                            "fouls": get_stat_value_py(stats, "Fouls"),
+                            "corners": get_stat_value_py(stats, "Corner Kicks"),
+                            "saves": get_stat_value_py(stats, "Goalkeeper Saves")
+                        }
+                    }
+        except Exception as e:
+            print("Error fetching real match stats in python-service:", e)
+            
+    return matches_db.get(match_id) or matches_db.get("M001")
+
+def fetch_real_team_form(team_code: str):
+    api_key = os.getenv("API_SPORTS_API_KEY")
+    team_id = API_SPORTS_TEAM_IDS.get(team_code.upper())
+    if not team_id:
+        for k, v in API_SPORTS_TEAM_IDS.items():
+            if team_code.lower() in k.lower() or k.lower() in team_code.lower():
+                team_id = v
+                break
+                
+    if team_id and api_key:
+        try:
+            url = f"https://v3.football.api-sports.io/fixtures?team={team_id}&season=2024"
+            headers = {"x-apisports-key": api_key}
+            r = requests.get(url, headers=headers, timeout=5)
+            if r.status_code == 200:
+                data = r.json()
+                response = data.get("response", [])
+                completed = [f for f in response if f.get("fixture", {}).get("status", {}).get("short") in ["FT", "AET", "PEN"]]
+                completed.sort(key=lambda x: x.get("fixture", {}).get("timestamp", 0), reverse=True)
+                recent = completed[:5]
+                if recent:
+                    form = ""
+                    for f in recent:
+                        is_home = f["teams"]["home"]["id"] == team_id
+                        team_score = f["goals"]["home"] if is_home else f["goals"]["away"]
+                        opp_score = f["goals"]["away"] if is_home else f["goals"]["home"]
+                        if team_score is None or opp_score is None:
+                            continue
+                        if team_score > opp_score:
+                            form = "W" + form
+                        elif team_score < opp_score:
+                            form = "L" + form
+                        else:
+                            form = "D" + form
+                    return f"Form: {form}. Dynamic recent statistics calculated from last {len(recent)} fixtures."
+        except Exception as e:
+            print("Error fetching real team form in python-service:", e)
+            
+    return team_forms_db.get(team_code.upper()) or "Form: WDLWW. Fallback metrics loaded."
+
 class HealthResponse(BaseModel):
     status: str
     service: str
@@ -440,7 +601,7 @@ async def get_player_cluster(player_id: str):
 @app.get("/predict/match/{match_id}", dependencies=[Depends(verify_x402_payment)])
 async def get_match_prediction(match_id: str):
     """Generates an AI match outcome prediction (Paid)"""
-    match = matches_db.get(match_id)
+    match = fetch_real_match_stats(match_id)
     if not match:
         raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
         
@@ -449,8 +610,8 @@ async def get_match_prediction(match_id: str):
     home_code = match["home_team"]["code"]
     away_code = match["away_team"]["code"]
     
-    home_form = team_forms_db.get(home_code, "No recent form data")
-    away_form = team_forms_db.get(away_code, "No recent form data")
+    home_form = fetch_real_team_form(home_code)
+    away_form = fetch_real_team_form(away_code)
     
     # Heuristic math
     home_score = 0
@@ -527,7 +688,7 @@ The form guide gives a slight advantage to the home side, though cup ties are hi
 @app.get("/tactical/match/{match_id}", dependencies=[Depends(verify_x402_payment)])
 async def get_tactical_breakdown(match_id: str):
     """Generates an AI tactical match breakdown (Paid)"""
-    match = matches_db.get(match_id)
+    match = fetch_real_match_stats(match_id)
     if not match:
         raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
         

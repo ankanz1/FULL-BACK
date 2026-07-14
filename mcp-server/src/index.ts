@@ -209,7 +209,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (name === "get_match_stats") {
     const { match_id } = args as { match_id: string };
-    const match = sportsDb.getMatchStats(match_id);
+    const match = await sportsDb.getMatchStats(match_id);
     if (!match) {
       throw new Error(`Match with ID ${match_id} not found.`);
     }
@@ -225,7 +225,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (name === "get_team_form") {
     const { team_id } = args as { team_id: string };
-    const form = sportsDb.getTeamForm(team_id);
+    const form = await sportsDb.getTeamForm(team_id);
     if (!form) {
       throw new Error(`Team form for ${team_id} not found.`);
     }
@@ -241,7 +241,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (name === "get_standings") {
     const { group } = args as { group: string };
-    const standings = sportsDb.getStandings(group);
+    const standings = await sportsDb.getStandings(group);
     if (!standings) {
       throw new Error(`Group standings for Group ${group} not found. Available groups: A, B.`);
     }

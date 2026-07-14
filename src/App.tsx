@@ -30,151 +30,13 @@ interface Highlight {
   thumbnail_url: string;
 }
 
-// Custom 3D Low-Poly Vector Football and Stadium Wireframe Canvas component
-function LowPolyCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mouseRef = useRef({ x: 0, y: 0, targetX: 0, targetY: 0 });
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let animationFrameId: number;
-    let width = (canvas.width = canvas.offsetWidth);
-    let height = (canvas.height = canvas.offsetHeight);
-
-    // Resize listener
-    const handleResize = () => {
-      if (!canvas) return;
-      width = canvas.width = canvas.offsetWidth;
-      height = canvas.height = canvas.offsetHeight;
-    };
-    window.addEventListener('resize', handleResize);
-
-    // Track mouse move for cursor reaction
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      mouseRef.current.targetX = ((e.clientX - rect.left) / width) * 2 - 1;
-      mouseRef.current.targetY = -(((e.clientY - rect.top) / height) * 2 - 1);
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-
-    // Define 3D low-poly wireframe vertices (sphere/icosahedron for soccer ball)
-    const t = (1.0 + Math.sqrt(5.0)) / 2.0;
-    const baseVertices = [
-      [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
-      [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
-      [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]
-    ].map(v => {
-      const length = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-      return [v[0]/length, v[1]/length, v[2]/length];
-    });
-
-    const faces = [
-      [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
-      [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
-      [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
-      [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
-    ];
-
-    let angleX = 0;
-    let angleY = 0;
-
-    const render = () => {
-      ctx.clearRect(0, 0, width, height);
-
-      // Smooth mouse interpolation
-      const mouse = mouseRef.current;
-      mouse.x += (mouse.targetX - mouse.x) * 0.1;
-      mouse.y += (mouse.targetY - mouse.y) * 0.1;
-
-      // Auto-rotation speed influenced by mouse hover
-      angleX += 0.005 + mouse.y * 0.02;
-      angleY += 0.008 + mouse.x * 0.02;
-
-      ctx.save();
-      ctx.translate(width / 2, height / 2);
-      
-      const scale = Math.min(width, height) * 0.35;
-      const projected: Array<[number, number, number]> = [];
-
-      // Rotate and project vertices
-      baseVertices.forEach(v => {
-        let x = v[0];
-        let y = v[1];
-        let z = v[2];
-
-        // Rotate Y
-        let cosY = Math.cos(angleY);
-        let sinY = Math.sin(angleY);
-        let x1 = x * cosY - z * sinY;
-        let z1 = x * sinY + z * cosY;
-
-        // Rotate X
-        let cosX = Math.cos(angleX);
-        let sinX = Math.sin(angleX);
-        let y2 = y * cosX - z1 * sinX;
-        let z2 = y * sinX + z1 * cosX;
-
-        // Perspective projection
-        const distance = 2.5;
-        const perspective = 1 / (distance - z2);
-        projected.push([x1 * scale * perspective, y2 * scale * perspective, z2]);
-      });
-
-      // Draw wireframe faces
-      ctx.strokeStyle = '#D9622B'; // Accent burnt orange
-      ctx.lineWidth = 1;
-      
-      faces.forEach(face => {
-        const p1 = projected[face[0]];
-        const p2 = projected[face[1]];
-        const p3 = projected[face[2]];
-
-        // Simple backface culling (only draw faces pointing forward)
-        const v1x = p2[0] - p1[0];
-        const v1y = p2[1] - p1[1];
-        const v2x = p3[0] - p1[0];
-        const v2y = p3[1] - p1[1];
-        const normalZ = v1x * v2y - v1y * v2x;
-
-        if (normalZ > 0) {
-          ctx.beginPath();
-          ctx.moveTo(p1[0], p1[1]);
-          ctx.lineTo(p2[0], p2[1]);
-          ctx.lineTo(p3[0], p3[1]);
-          ctx.closePath();
-          ctx.fillStyle = 'rgba(23, 23, 21, 0.4)';
-          ctx.fill();
-          ctx.stroke();
-        }
-      });
-
-      // Draw telemetry coordinate markers around the grid bounds
-      ctx.restore();
-
-      animationFrameId = requestAnimationFrame(render);
-    };
-
-    render();
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('mousemove', handleMouseMove);
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} className="w-full h-full block bg-transparent" />;
-}
 
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [progress, setProgress] = useState(0);
-  
+
   // Custom router state
   const [currentPath, setCurrentPath] = useState('/'); // '/' | '/dashboard' | '/analyst' | '/players' | '/highlights' | '/developers'
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -183,18 +45,25 @@ export default function App() {
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const transitionSweepRef = useRef<HTMLDivElement>(null);
   const canvas3dRef = useRef<HTMLDivElement>(null);
+  const layer1Ref = useRef<HTMLDivElement>(null);
+  const layer2Ref = useRef<HTMLDivElement>(null);
+  const layer3Ref = useRef<HTMLDivElement>(null);
+  const contoursRef = useRef<HTMLDivElement>(null);
+  // Hero card — receives cursor-driven rotateX/Y from rAF loop
+  const tiltWrapRef = useRef<HTMLDivElement>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
   // Data states
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<string>('PL001'); // Christian Pulisic
   const [playerClusterData, setPlayerClusterData] = useState<any>(null);
-  
+
   // Match & prediction states
   const [selectedMatchId, setSelectedMatchId] = useState<string>('M001'); // USA vs COL
   const [predictionData, setPredictionData] = useState<any>(null);
   const [breakdownData, setBreakdownData] = useState<any>(null);
   const [highlightsData, setHighlightsData] = useState<Highlight[]>([]);
-  
+
   // Paywall states
   const [paywallRequired, setPaywallRequired] = useState<{
     resource: string;
@@ -203,7 +72,7 @@ export default function App() {
     resolve: (sig: string) => void;
     reject: (err: any) => void;
   } | null>(null);
-  
+
   const [paymentStatus, setPaymentStatus] = useState<string>(''); // 'signing' | 'settled' | ''
   const [paymentTx, setPaymentTx] = useState<string>('');
   const [unlockedResources, setUnlockedResources] = useState<Record<string, boolean>>({});
@@ -249,15 +118,80 @@ export default function App() {
     fetchPlayers();
   }, []);
 
+  // Detect prefers-reduced-motion
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mediaQuery.matches);
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  // ── Hero card cursor-tilt rAF loop ──
+  // Drives rotateX / rotateY on the .hero-card via tiltWrapRef.
+  // Bob is NOT used here (card is static except for cursor interaction).
+  useEffect(() => {
+    if (currentPath !== '/') return;
+
+    const card = tiltWrapRef.current;
+    if (!card) return;
+
+    // Resting angles (match the CSS default)
+    const REST_RY = 8;   // deg
+    const REST_RX = -5;  // deg
+    const MAX_D  = 7;    // max delta from rest
+
+    if (reducedMotion) {
+      card.style.transform = `perspective(1100px) rotateY(${REST_RY}deg) rotateX(${REST_RX}deg)`;
+      return;
+    }
+
+    let targetRY = REST_RY;
+    let targetRX = REST_RX;
+    let curRY = REST_RY;
+    let curRX = REST_RX;
+    let rafId: number;
+
+    const onMove = (e: MouseEvent) => {
+      const nx = (e.clientX / window.innerWidth)  * 2 - 1; // -1..+1
+      const ny = (e.clientY / window.innerHeight) * 2 - 1;
+      targetRY = REST_RY + nx * MAX_D;
+      targetRX = REST_RX - ny * MAX_D;
+    };
+
+    const onLeave = () => { targetRY = REST_RY; targetRX = REST_RX; };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseleave', onLeave);
+
+    const tick = () => {
+      curRY += (targetRY - curRY) * 0.07;
+      curRX += (targetRX - curRX) * 0.07;
+      if (tiltWrapRef.current) {
+        tiltWrapRef.current.style.transform =
+          `perspective(1100px) rotateY(${curRY.toFixed(3)}deg) rotateX(${curRX.toFixed(3)}deg)`;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseleave', onLeave);
+      cancelAnimationFrame(rafId);
+    };
+  }, [currentPath, reducedMotion]);
+
   // GSAP Entrance Animations
   const triggerEntranceAnims = () => {
-    // 3D Canvas fade in
-    gsap.fromTo('#stadium-backdrop', 
-      { opacity: 0, scale: 0.9 }, 
-      { opacity: 1, scale: 1, duration: 2, ease: 'power3.out' }
+    // 3D Canvas scale zoom in
+    gsap.fromTo('.viewport',
+      { scale: 0.9 },
+      { scale: 1, duration: 2, ease: 'power3.out' }
     );
     // Micro headlines wipe on
-    gsap.fromTo('.hero-title', 
+    gsap.fromTo('.hero-title',
       { clipPath: 'polygon(0 0, 0 0, 0 100%, 0% 100%)' },
       { clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)', duration: 1.5, ease: 'power4.inOut', delay: 0.5 }
     );
@@ -275,18 +209,20 @@ export default function App() {
       return;
     }
 
-    // GSAP diagonal orange sweep wipe
+    // GSAP diagonal orange sweep wipe in a single continuous timeline
     const tl = gsap.timeline({
       onComplete: () => {
-        setCurrentPath(path);
         setIsTransitioning(false);
-        // Wipe sweep out
-        gsap.to(sweep, { xPercent: 100, skewX: 0, duration: 0.6, ease: 'power3.in' });
       }
     });
 
-    tl.set(sweep, { xPercent: -100, skewX: -20 })
-      .to(sweep, { xPercent: 0, skewX: 0, duration: 0.6, ease: 'power3.out' });
+    tl.set(sweep, { xPercent: -101, skewX: -20 })
+      .to(sweep, { xPercent: 0, skewX: 0, duration: 0.5, ease: 'power3.out' })
+      .call(() => {
+        // Change route in the middle when screen is fully covered
+        setCurrentPath(path);
+      })
+      .to(sweep, { xPercent: 101, skewX: 20, duration: 0.5, ease: 'power3.in', delay: 0.1 });
   };
 
   // Fetch players list
@@ -318,13 +254,13 @@ export default function App() {
     }
 
     const res = await fetch(url, { headers });
-    
+
     if (res.status === 402) {
       const paymentRequiredHeader = res.headers.get('payment-required');
       if (!paymentRequiredHeader) {
         throw new Error('402 returned without requirements header');
       }
-      
+
       const requirements = JSON.parse(atob(paymentRequiredHeader));
       const accepts = requirements.accepts?.[0];
       if (!accepts) {
@@ -378,13 +314,13 @@ export default function App() {
   const handlePaywallSettle = () => {
     if (!paywallRequired) return;
     setPaymentStatus('signing');
-    
+
     // Simulate smart contract interactions (EIP-3009 permit/transfer signature)
     setTimeout(() => {
-      const mockTx = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+      const mockTx = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
       setPaymentTx(mockTx);
       setPaymentStatus('settled');
-      
+
       setTimeout(() => {
         const resolveFn = paywallRequired.resolve;
         setPaywallRequired(null);
@@ -512,7 +448,7 @@ export default function App() {
       if (isPremiumTool) {
         setMessages(prev => [...prev, {
           sender: 'system',
-          text: `INVOKING_MCP_TOOL: fullback-mcp-server :: ${toolName}()\nSTATUS: 402 PAYMENT REQUIRED (${parseFloat(amount)/1000000} USDC required) :: ${desc}`
+          text: `INVOKING_MCP_TOOL: fullback-mcp-server :: ${toolName}()\nSTATUS: 402 PAYMENT REQUIRED (${parseFloat(amount) / 1000000} USDC required) :: ${desc}`
         }]);
 
         try {
@@ -533,7 +469,7 @@ export default function App() {
           } else if (toolName === 'generate_highlights') {
             reply += `Highlights generation successful. Found ${result.highlights.length} events inside the audio telemetry. Visual clips unlocked.`;
           }
-          
+
           setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
         } catch (err: any) {
           setMessages(prev => [...prev, { sender: 'system', text: `MCP_TOOL_EXECUTION :: FAILED\nReason: ${err.message}` }]);
@@ -614,112 +550,135 @@ export default function App() {
       {/* Global Background Elements */}
       <div className="fixed inset-0 bg-[#0E0E0E] z-0" />
       <div className="fixed top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#D9622B]/2 blur-[120px] rounded-full pointer-events-none z-0" />
-      
-      {/* Sticky Header Navigation */}
-      <header className="fixed top-0 left-0 w-full h-16 border-b border-[#2A2A28] bg-[#0E0E0E]/80 backdrop-blur-md z-40 px-6 md:px-12 flex items-center justify-between">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => handleNavigate('/')}>
-          <img src={logoMark} alt="Logo" className="w-8 h-8 object-contain" />
-          <span className="font-syncopate text-[0.8rem] tracking-widest font-bold hidden sm:inline-block">FULL BACK</span>
-        </div>
 
-        <nav className="flex items-center gap-1 sm:gap-6">
-          <button
-            onClick={() => handleNavigate('/')}
-            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
-          >
-            HOME
-            {currentPath === '/' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
-          </button>
-          <button
-            onClick={() => handleNavigate('/dashboard')}
-            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/dashboard' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
-          >
-            DASHBOARD
-            {currentPath === '/dashboard' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
-          </button>
-          <button
-            onClick={() => handleNavigate('/analyst')}
-            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/analyst' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
-          >
-            ANALYST
-            {currentPath === '/analyst' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
-          </button>
-          <button
-            onClick={() => handleNavigate('/players')}
-            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/players' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
-          >
-            PLAYERS
-            {currentPath === '/players' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
-          </button>
-          <button
-            onClick={() => handleNavigate('/highlights')}
-            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/highlights' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
-          >
-            HIGHLIGHTS
-            {currentPath === '/highlights' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
-          </button>
-          <button
-            onClick={() => handleNavigate('/developers')}
-            className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/developers' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
-          >
-            DEVELOPERS
-            {currentPath === '/developers' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
-          </button>
-        </nav>
-      </header>
+      {/* Route transition sweep curtain */}
+      <div
+        ref={transitionSweepRef}
+        style={{ display: isTransitioning ? 'block' : 'none' }}
+        className="fixed top-0 left-0 w-full h-full bg-[#D9622B] z-50 pointer-events-none transition-curtain"
+      />
+
+      {/* Sticky Header Navigation */}
+      {currentPath !== '/' && (
+        <header className="fixed top-0 left-0 w-full h-16 border-b border-[#2A2A28] bg-[#0E0E0E]/80 backdrop-blur-md z-60 px-6 md:px-12 flex items-center justify-between">
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => handleNavigate('/')}>
+            <img src={logoMark} alt="Logo" className="w-8 h-8 object-contain" />
+            <span className="font-syncopate text-[0.8rem] tracking-widest font-bold hidden sm:inline-block">FULL BACK</span>
+          </div>
+
+          <nav className="flex items-center gap-1 sm:gap-6">
+            <button
+              onClick={() => handleNavigate('/')}
+              className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+            >
+              HOME
+              {currentPath === '/' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+            </button>
+            <button
+              onClick={() => handleNavigate('/dashboard')}
+              className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/dashboard' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+            >
+              DASHBOARD
+              {currentPath === '/dashboard' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+            </button>
+            <button
+              onClick={() => handleNavigate('/analyst')}
+              className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/analyst' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+            >
+              ANALYST
+              {currentPath === '/analyst' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+            </button>
+            <button
+              onClick={() => handleNavigate('/players')}
+              className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/players' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+            >
+              PLAYERS
+              {currentPath === '/players' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+            </button>
+            <button
+              onClick={() => handleNavigate('/highlights')}
+              className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/highlights' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+            >
+              HIGHLIGHTS
+              {currentPath === '/highlights' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+            </button>
+            <button
+              onClick={() => handleNavigate('/developers')}
+              className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/developers' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+            >
+              DEVELOPERS
+              {currentPath === '/developers' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+            </button>
+          </nav>
+        </header>
+      )}
 
       {/* Main Content Body */}
-      <main className="flex-grow pt-16 z-10 flex flex-col relative">
-        
-        {/* Route transition sweep curtain */}
-        <div
-          ref={transitionSweepRef}
-          className="fixed top-0 left-0 w-full h-full bg-[#D9622B] z-50 transform -translate-x-full pointer-events-none"
-        />
+      <main className={`flex-grow z-10 flex flex-col relative ${currentPath === '/' ? 'pt-0' : 'pt-16'}`}>
 
         {/* 1. HOME PATH */}
         {currentPath === '/' && (
-          <div className="flex-grow flex flex-col items-center justify-center relative min-h-[calc(100vh-4rem)] p-6 md:p-12 overflow-hidden">
-            
-            {/* Background 3D rotating canvas rig */}
-            <div ref={canvas3dRef} id="stadium-backdrop" className="absolute inset-0 z-0 opacity-20 pointer-events-none">
-              <LowPolyCanvas />
+          <div className="hero-root">
+
+            {/* ── TOP BAR ── */}
+            <div className="hero-topbar">
+              <div className="flex items-center gap-3">
+                <img src={logoMark} alt="" className="w-7 h-7 object-contain" />
+                <span className="font-syncopate text-[0.72rem] tracking-[0.22em] font-bold uppercase text-[#ECEAE3]">FULL BACK</span>
+              </div>
+              <div className="mono text-[0.58rem] text-[#D9622B] text-right leading-relaxed select-none hidden md:flex flex-col items-end">
+                <span>LATITUDE: 41.8623° N</span>
+                <span>FLOODLIGHT: 4000K</span>
+              </div>
             </div>
 
-            <div className="max-w-4xl w-full text-center space-y-8 z-10 relative">
-              <div className="mono text-[0.7rem] md:text-[0.8rem] text-[#D9622B] tracking-widest uppercase">
-                [ SEASON 2026 — TELEMETRY HUB ]
-              </div>
-              
-              <h1 className="hero-title font-syncopate text-[2.5rem] sm:text-[4.5rem] md:text-[6.5rem] font-bold leading-none tracking-tighter uppercase select-none">
-                FULL BACK
-              </h1>
-              
-              <p className="max-w-xl mx-auto text-neutral-400 text-[0.85rem] md:text-[0.95rem] leading-relaxed font-jetbrains">
-                An AI match analyst, exposed as an MCP server, that any fan or agent can query for World Cup insight — free for basics, pay-per-query in USDC.
-              </p>
+            {/* ── BODY: left title / right card ── */}
+            <div className="hero-body">
 
-              <div className="pt-6">
-                <button
-                  onClick={() => handleNavigate('/dashboard')}
-                  className="mono border border-[#ECEAE3] text-[#ECEAE3] px-8 py-3 bg-transparent hover:bg-[#D9622B] hover:border-[#D9622B] transition duration-300 font-semibold tracking-wider text-[0.75rem] cursor-pointer"
+              {/* Left: giant display title — z-20 so it prints over the card */}
+              <div className="hero-title-block">
+                <h1 className="hero-display font-syncopate uppercase select-none">
+                  EMPTY<br />GRIDIRON
+                </h1>
+              </div>
+
+              {/* Right: 3-D tilt card scene */}
+              <div className="hero-card-scene">
+                {/* tiltWrapRef — rAF writes perspective rotateX/Y here */}
+                <div
+                  ref={tiltWrapRef}
+                  className="hero-card"
+                  style={{ willChange: 'transform' }}
                 >
-                  ENTER THE FIELD
-                </button>
+                  {/* Stadium photo */}
+                  <div className="hero-card-img" />
+                  {/* Glass sheen */}
+                  <div className="hero-card-sheen" />
+                  {/* Corner HUD micro-labels */}
+                  <span className="hero-card-hud hero-card-hud--tl">FIELD_CAM_01 :: LIVE</span>
+                  <span className="hero-card-hud hero-card-hud--tr">TELEMETRY_ON</span>
+                  <span className="hero-card-hud hero-card-hud--bl">LAT 41.8623°N</span>
+                  <span className="hero-card-hud hero-card-hud--br">BASE_SEPOLIA</span>
+                </div>
               </div>
             </div>
 
-            {/* Corner telemetries */}
-            <div className="absolute bottom-6 left-8 mono text-[0.6rem] text-neutral-500 leading-relaxed text-left select-none hidden md:block">
-              <div>LATITUDE: 41.8623° N</div>
-              <div>FLOODLIGHT: 4000K</div>
-            </div>
-            <div className="absolute bottom-6 right-8 mono text-[0.6rem] text-neutral-500 leading-relaxed text-right select-none hidden md:block">
-              <div>USDC_GATE: ACTIVE</div>
-              <div>SETTLEMENT: BASE_SEPOLIA</div>
+            {/* ── BOTTOM BAR ── */}
+            <div className="hero-bottombar">
+              <div className="select-none">
+                <div className="mono text-[0.62rem] text-[#D9622B] tracking-widest mb-0.5">[ SEASON 2026 — NIGHT MATCH ]</div>
+                <div className="mono text-[0.62rem] text-[#8B8A85] tracking-wider">SILENT GRIDIRON &amp; STADIUM LIGHT AT REST</div>
+              </div>
+              <button
+                onClick={() => handleNavigate('/dashboard')}
+                className="mono border border-[#ECEAE3] text-[#ECEAE3] px-8 py-3 bg-transparent hover:bg-[#D9622B] hover:border-[#D9622B] transition-all duration-300 font-semibold tracking-wider text-[0.72rem] cursor-pointer whitespace-nowrap"
+              >
+                ENTER THE FIELD →
+              </button>
             </div>
           </div>
         )}
+
 
         {/* 2. DASHBOARD PATH */}
         {currentPath === '/dashboard' && (
@@ -734,7 +693,7 @@ export default function App() {
 
             {/* Free Standings tables */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              
+
               {/* Group A */}
               <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
                 <div className="flex justify-between items-center mb-4 border-b border-[#2A2A28]/50 pb-2">
@@ -849,7 +808,7 @@ export default function App() {
             <div>
               <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ TODAY_FIXTURES ]</h3>
               <div className="space-y-4">
-                
+
                 {/* USA vs COL */}
                 <div className="border border-[#2A2A28] bg-[#171715]/20 p-6 rounded flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-6">
@@ -923,7 +882,7 @@ export default function App() {
                 <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ PREDICTIVE_TACTICAL_HUD ]</span>
                 <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">AI MATCH ANALYST</h1>
               </div>
-              
+
               {/* Match selector */}
               <div className="flex items-center gap-2">
                 <span className="mono text-[0.6rem] text-neutral-500 uppercase tracking-widest mr-2">TARGET_ID:</span>
@@ -940,12 +899,12 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              
+
               {/* Gated Prediction panel */}
               <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between relative overflow-hidden">
                 <div>
                   <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ OUTCOME_PREDICTION ]</h3>
-                  
+
                   {!predictionData ? (
                     <div className="flex flex-col items-center justify-center h-48">
                       <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
@@ -1002,7 +961,7 @@ export default function App() {
               <div className="lg:col-span-2 border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between relative overflow-hidden">
                 <div className="flex-1 flex flex-col min-h-0">
                   <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ POST_MATCH_TACTICAL_BREAKDOWN ]</h3>
-                  
+
                   {!breakdownData ? (
                     <div className="flex flex-col items-center justify-center py-12">
                       <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
@@ -1028,7 +987,7 @@ export default function App() {
                           <div className="text-[#D9622B] font-bold">{breakdownData.stats_snapshot.corners.home} / {breakdownData.stats_snapshot.corners.away}</div>
                         </div>
                       </div>
-                      
+
                       <p className="text-[0.75rem] text-neutral-300 leading-relaxed font-jetbrains whitespace-pre-wrap">
                         {breakdownData.tactical_breakdown}
                       </p>
@@ -1054,7 +1013,7 @@ export default function App() {
                 <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase">[ ANALYST_CHAT_TERMINAL ]</h3>
                 <span className="mono text-[0.6rem] text-neutral-500">SESSION: ACTIVE_SECURE</span>
               </div>
-              
+
               <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-2 font-mono text-[0.7rem] max-h-[250px]">
                 {messages.map((msg, idx) => (
                   <div key={idx} className={`p-3 rounded border ${msg.sender === 'user' ? 'bg-black/30 border-[#2A2A28] text-[#ECEAE3]' : msg.sender === 'system' ? 'bg-[#D9622B]/5 border-[#D9622B]/20 text-[#D9622B]' : 'bg-neutral-900/40 border-[#2A2A28]/50 text-neutral-300'}`}>
@@ -1101,7 +1060,7 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              
+
               {/* Left Selector pane */}
               <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between">
                 <div>
@@ -1109,7 +1068,7 @@ export default function App() {
                   <p className="mono text-[0.65rem] text-neutral-500 leading-relaxed mb-6">
                     SELECT A TARGET ATHLETE TO QUERY STYLE CORRELATION CENTROIDS.
                   </p>
-                  
+
                   <div className="space-y-2">
                     <label className="mono text-[0.6rem] text-neutral-400">PLAYER_ID_NAME:</label>
                     <select
@@ -1144,7 +1103,7 @@ export default function App() {
 
               {/* Center results pane */}
               <div className="lg:col-span-2 border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between min-h-[300px]">
-                
+
                 {!playerClusterData ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-center">
                     <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
@@ -1160,7 +1119,7 @@ export default function App() {
                             NAT: {playerClusterData.player.nationality.toUpperCase()} · POSITION: {playerClusterData.player.position.toUpperCase()}
                           </div>
                         </div>
-                        
+
                         {receipts[`/cluster/player/${selectedPlayer}`] && (
                           <span className="mono text-[0.55rem] px-2 py-0.5 border border-[#D9622B]/30 bg-[#D9622B]/5 text-[#D9622B] rounded">
                             SETTLED · 0.01 USDC
@@ -1208,14 +1167,14 @@ export default function App() {
             <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
               <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ PCA_2D_PROJECTION_MATRIX ]</h3>
               <div className="relative aspect-[21/9] w-full border border-[#2A2A28] bg-black/40 rounded overflow-hidden flex items-center justify-center">
-                
+
                 {players.length === 0 ? (
                   <span className="mono text-[0.65rem] text-neutral-500">LOADING PCA DIMENSION MAP...</span>
                 ) : (
                   <svg className="w-full h-full" viewBox="0 0 1000 400">
                     <line x1="500" y1="0" x2="500" y2="400" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
                     <line x1="0" y1="200" x2="1000" y2="200" stroke="rgba(255,255,255,0.03)" strokeWidth="1" />
-                    
+
                     {players.map((p) => {
                       const px = p.pca_x || 0;
                       const py = p.pca_y || 0;
@@ -1223,7 +1182,7 @@ export default function App() {
                       const cy = 200 - py * 90;
                       const isSelected = p.player_id === selectedPlayer;
                       const clusterColor = p.cluster === 0 ? '#D9622B' : p.cluster === 1 ? '#6ba642' : p.cluster === 2 ? '#3b82f6' : p.cluster === 3 ? '#a855f7' : '#eab308';
-                      
+
                       return (
                         <circle
                           key={p.player_id}
@@ -1294,7 +1253,7 @@ export default function App() {
             </div>
 
             <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
-              
+
               {highlightsData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20">
                   <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
@@ -1307,7 +1266,7 @@ export default function App() {
                     <div className="mono text-[0.55rem] text-neutral-500 mb-2 uppercase">AUDIO_RMS_ENERGY (SPIKES LOCATED)</div>
                     <svg className="w-full h-16" viewBox="0 0 1000 64" preserveAspectRatio="none">
                       <path
-                        d={`M 0 32 ${Array.from({length: 100}, (_, i) => {
+                        d={`M 0 32 ${Array.from({ length: 100 }, (_, i) => {
                           const isPeak = i === 18 || i === 58 || i === 82;
                           const height = isPeak ? 15 + Math.random() * 35 : 10 + Math.random() * 10;
                           return `L ${i * 10} ${32 - height} L ${i * 10 + 5} ${32 + height}`;
@@ -1318,10 +1277,10 @@ export default function App() {
                       />
                       <circle cx="180" cy="12" r="4" fill="#D9622B" />
                       <line x1="180" y1="12" x2="180" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
-                      
+
                       <circle cx="580" cy="8" r="4" fill="#D9622B" />
                       <line x1="580" y1="8" x2="580" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
-                      
+
                       <circle cx="820" cy="10" r="4" fill="#D9622B" />
                       <line x1="820" y1="10" x2="820" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
                     </svg>
@@ -1369,7 +1328,7 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              
+
               {/* Instructions side panel */}
               <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 space-y-6">
                 <div>
@@ -1377,7 +1336,7 @@ export default function App() {
                   <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed mb-4">
                     Install the packaged skill into Claude Code or other compatible agent environments in one command.
                   </p>
-                  
+
                   <div className="bg-[#0E0E0E] border border-[#2A2A28] p-3 rounded text-[0.65rem] mono text-[#D9622B] font-bold select-all">
                     npx skills add worldcup-analyst
                   </div>
@@ -1396,7 +1355,7 @@ export default function App() {
               {/* Code blocks reference */}
               <div className="lg:col-span-2 border border-[#2A2A28] bg-[#171715]/40 rounded p-6 space-y-6">
                 <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ CLAUDE_DESKTOP_CONFIG_TEMPLATE ]</h3>
-                
+
                 <div className="bg-[#0E0E0E] border border-[#2A2A28] p-5 rounded font-mono text-[0.65rem] text-neutral-300 overflow-x-auto">
                   <pre>{`{
   "mcpServers": {
@@ -1452,7 +1411,7 @@ export default function App() {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 select-none font-jetbrains animate-fade-in">
           <div className="max-w-md w-full border border-[#D9622B]/30 bg-[#171715] rounded p-6 shadow-2xl space-y-6 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-[2px] bg-[#D9622B]" />
-            
+
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 border border-neutral-800 bg-[#D9622B]/5 flex items-center justify-center text-[#D9622B] text-[1.2rem] font-bold">
                 ▲

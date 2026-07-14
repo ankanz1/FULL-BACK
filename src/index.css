@@ -28,10 +28,11 @@
 html,
 body {
   margin: 0;
-  height: 100%;
+  min-height: 100%;
   background: var(--bg);
   color: var(--silver);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .field-body {
@@ -109,33 +110,36 @@ body {
 }
 
 .layer-1 {
-  background-image: url('https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&q=90&w=2000');
-  filter: grayscale(1) contrast(1.25) brightness(0.55);
+  background: linear-gradient(180deg, #171715 0%, #0E0E0E 100%);
 }
 
 .layer-2 {
-  background-image: url('https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?auto=format&fit=crop&q=90&w=2000');
-  filter: grayscale(1) contrast(1.1) brightness(0.75);
-  opacity: 0.55;
-  mix-blend-mode: screen;
+  background: transparent;
+  opacity: 0;
 }
 
 .layer-3 {
-  background-image: url('https://images.unsplash.com/photo-1486286701208-1d58e9338013?auto=format&fit=crop&q=90&w=2000');
-  filter: grayscale(1) contrast(1.35) brightness(0.85);
-  opacity: 0.4;
-  mix-blend-mode: overlay;
+  background: transparent;
+  opacity: 0;
 }
 
-.yard-lines {
+.contours {
   position: absolute;
   width: 200%;
   height: 200%;
   top: -50%;
   left: -50%;
-  background-image: repeating-linear-gradient(90deg, transparent 0, transparent 38px, rgba(255, 255, 255, 0.055) 39px, transparent 40px);
+  background-image: repeating-radial-gradient(circle at 50% 50%, transparent 0, transparent 38px, rgba(217, 98, 43, 0.06) 39px, transparent 40px);
   transform: translateZ(120px);
   pointer-events: none;
+}
+
+.pitch-lines {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(45px);
+  pointer-events: none;
+  opacity: 0.5;
 }
 
 .interface-grid {
@@ -226,8 +230,15 @@ body {
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -251,4 +262,234 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 90, 31, 0.3);
+}
+
+.transition-curtain {
+  transform: translateX(-101%);
+}
+
+/* ══════════════════════════════════════════════════════════
+   HOME PAGE — full-screen hero layout
+   ══════════════════════════════════════════════════════════
+   Structure:
+     .hero-root            3-row grid (topbar / body / bottombar)
+     .hero-topbar          logo + telemetry
+     .hero-body            2-col: title-block | card-scene
+     .hero-title-block     giant display headline (z-20, overlaps card)
+     .hero-display         the actual <h1> text
+     .hero-card-scene      perspective container (right col)
+     .hero-card            tilt wrapper — JS writes rotateX/Y here
+     .hero-card-img        stadium photo div
+     .hero-card-sheen      glass diagonal highlight
+     .hero-card-hud        corner micro-label base
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Root: full-viewport 3-row grid ── */
+.hero-root {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 56px 1fr 68px;
+  overflow: hidden;
+  background: #0E0E0E;
+  isolation: isolate; /* new stacking context so mix-blend works cleanly */
+}
+
+/* Subtle vertical grain columns */
+.hero-root::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 39px,
+    rgba(255, 255, 255, 0.016) 40px
+  );
+}
+
+/* ── Top bar ── */
+.hero-topbar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+/* ── Bottom bar ── */
+.hero-bottombar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+/* ── Body: 2-col grid (title left, card right) ── */
+.hero-body {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  padding: 2.5rem 2rem 2.5rem 2.5rem;
+  overflow: visible;
+}
+
+/* ── Left: title block — z-20 so text prints over the card ── */
+.hero-title-block {
+  position: relative;
+  z-index: 20;
+  /* Bleed right so the headline visually overlaps the card edge */
+  margin-right: -6vw;
+}
+
+/* The <h1> itself */
+.hero-display {
+  font-size: clamp(3.2rem, 8.5vw, 8.8rem);
+  font-weight: 900;
+  line-height: 0.87;
+  letter-spacing: -0.03em;
+  color: #ECEAE3;
+  margin: 0;
+  /* Cuts through the photo cleanly without hard edges */
+  mix-blend-mode: difference;
+}
+
+/* ── Right: card scene — houses the perspective camera ── */
+.hero-card-scene {
+  position: relative;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Perspective sits here so only the card gets the 3-D space */
+  perspective: 1100px;
+  perspective-origin: 50% 50%;
+}
+
+/* Ambient glow beneath the card (pseudo-element on the scene) */
+.hero-card-scene::after {
+  content: '';
+  position: absolute;
+  bottom: -36px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 75%;
+  height: 56px;
+  background: radial-gradient(ellipse, rgba(217, 98, 43, 0.20) 0%, transparent 70%);
+  filter: blur(18px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ── Card: receives JS rotateX/Y via tiltWrapRef ── */
+.hero-card {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  aspect-ratio: 16 / 10;
+  border-radius: 6px;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  /* Resting tilt — JS overrides on first rAF tick */
+  transform: perspective(1100px) rotateY(8deg) rotateX(-5deg);
+
+  /* Multi-layer elevation shadow */
+  box-shadow:
+    0 4px  14px rgba(0, 0, 0, 0.55),
+    0 16px 44px  rgba(0, 0, 0, 0.50),
+    0 40px 80px  rgba(0, 0, 0, 0.40),
+    0 0    0 1px rgba(217, 98, 43, 0.15);
+}
+
+/* ── Stadium photo — fills the card, 5% bleed for parallax headroom ── */
+.hero-card-img {
+  position: absolute;
+  inset: -5%;
+  width: 110%;
+  height: 110%;
+  background-image:
+    linear-gradient(
+      140deg,
+      rgba(14, 14, 14, 0.50) 0%,
+      rgba(14, 14, 14, 0.12) 44%,
+      rgba(14, 14, 14, 0.42) 100%
+    ),
+    url('https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&q=85&w=1400');
+  background-size: cover;
+  background-position: center 30%;
+  filter: grayscale(1) contrast(1.2) brightness(0.72);
+}
+
+/* ── Glass sheen — diagonal top-left highlight ── */
+.hero-card-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.11) 0%,
+    rgba(255, 255, 255, 0.04) 32%,
+    transparent 56%
+  );
+  border-radius: inherit;
+}
+
+/* ── HUD corner micro-labels ── */
+.hero-card-hud {
+  position: absolute;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.52rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(236, 234, 227, 0.40);
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+}
+.hero-card-hud--tl { top: 10px;    left: 12px;  }
+.hero-card-hud--tr { top: 10px;    right: 12px; }
+.hero-card-hud--bl { bottom: 10px; left: 12px;  }
+.hero-card-hud--br { bottom: 10px; right: 12px; color: rgba(217, 98, 43, 0.55); }
+
+/* ── Responsive: stack on narrow screens ── */
+@media (max-width: 860px) {
+  .hero-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    padding: 2rem 1.5rem;
+    gap: 2rem;
+  }
+
+  .hero-title-block {
+    margin-right: 0;
+    text-align: center;
+  }
+
+  .hero-display {
+    font-size: clamp(2.4rem, 11vw, 4.5rem);
+    mix-blend-mode: normal; /* no card to blend through on mobile */
+  }
+
+  .hero-card {
+    max-width: 88vw;
+    transform: perspective(1100px) rotateY(0deg) rotateX(-2deg);
+  }
+}
+
+/* ── Reduced-motion: keep shadow, freeze tilt ── */
+@media (prefers-reduced-motion: reduce) {
+  .hero-card {
+    transform: perspective(1100px) rotateY(8deg) rotateX(-5deg) !important;
+    transition: none !important;
+  }
 }
