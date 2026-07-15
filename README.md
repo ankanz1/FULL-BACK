@@ -101,28 +101,6 @@ External agents ─┘                 └──▶ Premium tools ──▶ x402
 
 ---
 
-## 7-day build order
-
-1. **Foundation** — repo scaffold, data API, read x402/Injective MCP docs, testnet wallet
-2. **Core MCP tools + player clustering** — free tools live, K-Means clustering built end-to-end
-3. **AI analytics + first x402 paywall** — prediction/tactical tools, payment loop proven early
-4. **Highlights + CCTP** — audio-spike highlight tool, cross-chain settlement wired in
-5. **Checkpoint** — assess before attempting formation tracking; skip if behind schedule
-6. **Agent Skill + dashboard polish** — package for reuse, finish UI
-7. **Ship** — demo recording, README with architecture diagram, deploy, submit
-
----
-
-## Submission checklist
-
-- [x] README explains why each Injective technology is used, not just that it's used
-- [ ] Demo video shows the full free → paywall → cross-chain payment → answer loop
-- [x] Free tier works standalone, no wallet required
-- [x] Agent Skill installable independently of the dashboard
-- [ ] Typeform submission before the July 19 deadline
-
----
-
 ## Technical Architecture
 
 ```mermaid
