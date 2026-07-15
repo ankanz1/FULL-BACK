@@ -1,4 +1,9 @@
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 dotenv.config();
 
 export interface Team {
@@ -318,14 +323,47 @@ export const sportsDb = {
       }
 
       if (apiFixtureId && process.env.API_SPORTS_API_KEY) {
+        const headers = { "x-apisports-key": process.env.API_SPORTS_API_KEY };
         const res = await fetch(`https://v3.football.api-sports.io/fixtures?id=${apiFixtureId}`, {
-          headers: { "x-apisports-key": process.env.API_SPORTS_API_KEY }
+          headers
         });
         
         if (res.ok) {
           const data = (await res.json()) as any;
           const fixture = data.response?.[0];
           if (fixture) {
+            // Fixtures?id= sometimes omits rich payloads — fill gaps from dedicated endpoints
+            let statistics = fixture.statistics || [];
+            let events = fixture.events || [];
+            let lineups = fixture.lineups || [];
+
+            if (!statistics.length || !events.length || !lineups.length) {
+              const [statsRes, eventsRes, lineupsRes] = await Promise.all([
+                !statistics.length
+                  ? fetch(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${apiFixtureId}`, { headers })
+                  : null,
+                !events.length
+                  ? fetch(`https://v3.football.api-sports.io/fixtures/events?fixture=${apiFixtureId}`, { headers })
+                  : null,
+                !lineups.length
+                  ? fetch(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${apiFixtureId}`, { headers })
+                  : null,
+              ]);
+
+              if (statsRes?.ok) {
+                const statsPayload = (await statsRes.json()) as any;
+                statistics = statsPayload.response || [];
+              }
+              if (eventsRes?.ok) {
+                const eventsPayload = (await eventsRes.json()) as any;
+                events = eventsPayload.response || [];
+              }
+              if (lineupsRes?.ok) {
+                const lineupsPayload = (await lineupsRes.json()) as any;
+                lineups = lineupsPayload.response || [];
+              }
+            }
+
             return {
               match_id: matchId,
               home_team: {
@@ -345,35 +383,35 @@ export const sportsDb = {
                 home: fixture.goals.home ?? 0,
                 away: fixture.goals.away ?? 0
               },
-              events: (fixture.events || []).map((e: any) => ({
-                time: e.time.elapsed,
-                type: e.type === "subst" ? "substitution" : e.type.toLowerCase(),
+              events: events.map((e: any) => ({
+                time: e.time?.elapsed ?? 0,
+                type: e.type === "subst" ? "substitution" : String(e.type || "card").toLowerCase(),
                 detail: e.detail || "",
-                team_id: String(e.team.id),
-                player: e.player.name || ""
+                team_id: String(e.team?.id ?? ""),
+                player: e.player?.name || ""
               })),
               stats: {
-                possession: getStatValue(fixture.statistics, "Ball Possession"),
-                shots: getStatValue(fixture.statistics, "Total Shots"),
-                shots_on_target: getStatValue(fixture.statistics, "Shots on Target"),
-                passes: getStatValue(fixture.statistics, "Total Passes"),
-                pass_accuracy: getStatValue(fixture.statistics, "Passes %"),
-                fouls: getStatValue(fixture.statistics, "Fouls"),
-                corners: getStatValue(fixture.statistics, "Corner Kicks"),
-                saves: getStatValue(fixture.statistics, "Goalkeeper Saves")
+                possession: getStatValue(statistics, "Ball Possession"),
+                shots: getStatValue(statistics, "Total Shots"),
+                shots_on_target: getStatValue(statistics, "Shots on Target"),
+                passes: getStatValue(statistics, "Total Passes"),
+                pass_accuracy: getStatValue(statistics, "Passes %"),
+                fouls: getStatValue(statistics, "Fouls"),
+                corners: getStatValue(statistics, "Corner Kicks"),
+                saves: getStatValue(statistics, "Goalkeeper Saves")
               },
               lineups: {
                 home: {
-                  formation: fixture.lineups?.[0]?.formation || "4-4-2",
-                  starting: (fixture.lineups?.[0]?.startXI || []).map((p: any) => ({
+                  formation: lineups?.[0]?.formation || "4-4-2",
+                  starting: (lineups?.[0]?.startXI || []).map((p: any) => ({
                     number: p.player.number,
                     name: p.player.name,
                     position: p.player.pos
                   }))
                 },
                 away: {
-                  formation: fixture.lineups?.[1]?.formation || "4-4-2",
-                  starting: (fixture.lineups?.[1]?.startXI || []).map((p: any) => ({
+                  formation: lineups?.[1]?.formation || "4-4-2",
+                  starting: (lineups?.[1]?.startXI || []).map((p: any) => ({
                     number: p.player.number,
                     name: p.player.name,
                     position: p.player.pos

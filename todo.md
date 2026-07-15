@@ -91,12 +91,12 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 
 ## Day 3 — AI analytics + first x402 paywall
 
-- [ ] Add `predict_outcome(match_id)` MCP tool — start with a simple stats-based heuristic (form + head-to-head), then have an LLM turn the numbers into a natural-language prediction
-- [ ] Add `tactical_breakdown(match_id)` MCP tool — LLM-generated tactical writeup using the match/team data you already have
-- [ ] Follow the x402 MCP guide step by step: https://docs.x402.org/guides/mcp-server-with-x402
-  - [ ] Gate `player_style_cluster` behind a payment requirement first (your simplest, most reliable tool — prove the loop here)
-  - [ ] Test end-to-end on testnet: call tool -> get 402 -> sign payment -> retry -> receive data
-- [ ] Once that loop works, gate `predict_outcome` and `tactical_breakdown` the same way
+- [x] Add `predict_outcome(match_id)` MCP tool — start with a simple stats-based heuristic (form + head-to-head), then have an LLM turn the numbers into a natural-language prediction
+- [x] Add `tactical_breakdown(match_id)` MCP tool — LLM-generated tactical writeup using the match/team data you already have
+- [~] Follow the x402 MCP guide step by step: https://docs.x402.org/guides/mcp-server-with-x402
+  - [x] Gate `player_style_cluster` behind a payment requirement first (your simplest, most reliable tool — prove the loop here)
+  - [~] Test end-to-end on testnet: call tool -> get 402 -> sign payment -> retry -> receive data
+  - [x] Once that loop works, gate `predict_outcome` and `tactical_breakdown` the same way (mock settle + FastAPI 402 headers in place; real EIP-3009/CCTP still Day 4)
 
 ---
 
@@ -176,27 +176,27 @@ You're managing all three features end to end, backend AND frontend. Each featur
 Backend: `/cluster/player/{player_id}` FastAPI endpoint (Day 2), gated by x402 (Day 3).
 
 Frontend tasks:
-- [ ] Player search/select component (dropdown or search box to pick a player)
-- [ ] Cluster result card — shows the player's style cluster name + short description
-- [ ] "Similar players" list — 3-5 nearest players in the same cluster, clickable
-- [ ] Cluster scatter plot (Plotly or Recharts) — visualize all players colored by cluster, highlight the selected one
-- [ ] Paywall state — before payment: blurred/locked preview of the result; on 402 response, show "pay $X to unlock" with a call-to-action button
-- [ ] Payment confirmation state — show chain paid from, amount, and a settled/verified badge once CCTP confirms
-- [ ] Loading state while clustering/API call runs
-- [ ] Error state — player not found, dataset missing that player, API timeout
-- [ ] Wire this to the chat widget too — a fan should be able to ask "what type of player is X" in chat and get this same result inline, not just via the dedicated UI
+- [x] Player search/select component (dropdown or search box to pick a player)
+- [x] Cluster result card — shows the player's style cluster name + short description
+- [x] "Similar players" list — 3-5 nearest players in the same cluster, clickable
+- [x] Cluster scatter plot (Plotly or Recharts) — visualize all players colored by cluster, highlight the selected one
+- [x] Paywall state — before payment: blurred/locked preview of the result; on 402 response, show "pay $X to unlock" with a call-to-action button
+- [x] Payment confirmation state — show chain paid from, amount, and a settled/verified badge once CCTP confirms
+- [x] Loading state while clustering/API call runs
+- [x] Error state — player not found, dataset missing that player, API timeout
+- [x] Wire this to the chat widget too — a fan should be able to ask "what type of player is X" in chat and get this same result inline, not just via the dedicated UI
 
 ### 2. Highlight detector (Level 1) — nice to have, cut sub-features first
 
 Backend: `generate_highlights(video_id)` (Day 4), gated by x402.
 
 Frontend tasks:
-- [ ] Video/clip selector (since you're using one pre-approved sample clip, this can be a single "generate highlights" button — don't over-build a picker)
-- [ ] Processing/progress state — audio analysis takes a few seconds, show a clear loading indicator, don't let it look frozen
-- [ ] Highlight clip gallery — thumbnail + short preview for each detected clip
-- [ ] Clip player — click a highlight to play it inline
-- [ ] Paywall state — same pattern as clustering: locked preview, unlock button, payment confirmation badge
-- [ ] Error/fallback state — if peak detection finds zero or too many highlights, show a sensible message instead of an empty or broken gallery
+- [x] Video/clip selector (since you're using one pre-approved sample clip, this can be a single "generate highlights" button — don't over-build a picker)
+- [x] Processing/progress state — audio analysis takes a few seconds, show a clear loading indicator, don't let it look frozen
+- [x] Highlight clip gallery — thumbnail + short preview for each detected clip
+- [x] Clip player — click a highlight to play it inline
+- [x] Paywall state — same pattern as clustering: locked preview, unlock button, payment confirmation badge
+- [x] Error/fallback state — if peak detection finds zero or too many highlights, show a sensible message instead of an empty or broken gallery
 
 **Cut list if behind** (in order): skip the inline clip player (just show timestamps/thumbnails instead), skip the gallery polish (plain list is fine), skip threshold tuning UI entirely (hardcode one threshold, no user control).
 
@@ -213,9 +213,9 @@ Frontend tasks (only build these if the backend snapshot actually works):
 
 ### Shared frontend components (build once, reuse across all three)
 
-- [ ] One reusable "paywall unlock" component (locked preview → pay button → processing → confirmed) — build this once for clustering, reuse as-is for highlights
-- [ ] One reusable "payment confirmation" badge component (chain, amount, tx status) styled with the homepage's monospace telemetry look
-- [ ] One reusable loading/skeleton component
-- [ ] One reusable error/empty-state component
+- [x] One reusable "paywall unlock" component (locked preview → pay button → processing → confirmed) — build this once for clustering, reuse as-is for highlights
+- [x] One reusable "payment confirmation" badge component (chain, amount, tx status) styled with the homepage's monospace telemetry look
+- [x] One reusable loading/skeleton component
+- [x] One reusable error/empty-state component
 
 Building these four shared pieces once on Day 2-3 saves you from re-solving the same UI problem three times under time pressure later in the week.

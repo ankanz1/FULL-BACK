@@ -5,9 +5,13 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import { sportsDb } from "./sportsDb.js";
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config(); // also allow mcp-server/.env override
 
 const server = new Server(
   {

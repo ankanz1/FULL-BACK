@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import logoMark from './assets/logo_mark.png';
+import LoadingState from './components/LoadingState';
+import ErrorState from './components/ErrorState';
+import PaymentBadge from './components/PaymentBadge';
+import LockedPreview from './components/LockedPreview';
+import PaywallModal, { type PaywallRequest } from './components/PaywallModal';
 
 interface Player {
   player_id: string;
@@ -44,11 +49,6 @@ export default function App() {
   // Layout refs for GSAP animations
   const pageContainerRef = useRef<HTMLDivElement>(null);
   const transitionSweepRef = useRef<HTMLDivElement>(null);
-  const canvas3dRef = useRef<HTMLDivElement>(null);
-  const layer1Ref = useRef<HTMLDivElement>(null);
-  const layer2Ref = useRef<HTMLDivElement>(null);
-  const layer3Ref = useRef<HTMLDivElement>(null);
-  const contoursRef = useRef<HTMLDivElement>(null);
   // Hero card — receives cursor-driven rotateX/Y from rAF loop
   const tiltWrapRef = useRef<HTMLDivElement>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -65,18 +65,14 @@ export default function App() {
   const [highlightsData, setHighlightsData] = useState<Highlight[]>([]);
 
   // Paywall states
-  const [paywallRequired, setPaywallRequired] = useState<{
-    resource: string;
-    amount: string;
-    description: string;
-    resolve: (sig: string) => void;
-    reject: (err: any) => void;
-  } | null>(null);
+  const [paywallRequired, setPaywallRequired] = useState<PaywallRequest | null>(null);
 
   const [paymentStatus, setPaymentStatus] = useState<string>(''); // 'signing' | 'settled' | ''
   const [paymentTx, setPaymentTx] = useState<string>('');
   const [unlockedResources, setUnlockedResources] = useState<Record<string, boolean>>({});
   const [receipts, setReceipts] = useState<Record<string, { amount: string; tx: string }>>({});
+  const [premiumLoading, setPremiumLoading] = useState<Record<string, boolean>>({});
+  const [premiumError, setPremiumError] = useState<Record<string, string>>({});
 
   // Chat states
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'assistant' | 'system'; text: string }>>([
@@ -331,71 +327,89 @@ export default function App() {
     }, 1500);
   };
 
+  const withPremiumFetch = async <T,>(
+    path: string,
+    runner: () => Promise<T>,
+    onSuccess: (data: T) => void,
+    onClear: () => void,
+  ) => {
+    onClear();
+    setPremiumLoading((prev) => ({ ...prev, [path]: true }));
+    setPremiumError((prev) => ({ ...prev, [path]: '' }));
+    try {
+      const data = await runner();
+      onSuccess(data);
+    } catch (e: any) {
+      console.error(e);
+      setPremiumError((prev) => ({ ...prev, [path]: e?.message || 'Request failed' }));
+    } finally {
+      setPremiumLoading((prev) => ({ ...prev, [path]: false }));
+    }
+  };
+
   // Fetch clustering results
   const fetchClustering = async (playerId: string) => {
-    setPlayerClusterData(null);
-    try {
-      const data = await authenticatedFetch(
-        `http://localhost:8000/cluster/player/${playerId}`,
-        `/cluster/player/${playerId}`
-      );
-      setPlayerClusterData(data);
-    } catch (e) {
-      console.error(e);
-    }
+    const path = `/cluster/player/${playerId}`;
+    await withPremiumFetch(
+      path,
+      () => authenticatedFetch(`http://localhost:8000${path}`, path),
+      (data) => setPlayerClusterData(data),
+      () => setPlayerClusterData(null),
+    );
   };
 
   // Fetch prediction results
   const fetchPrediction = async (matchId: string) => {
-    setPredictionData(null);
-    try {
-      const data = await authenticatedFetch(
-        `http://localhost:8000/predict/match/${matchId}`,
-        `/predict/match/${matchId}`
-      );
-      setPredictionData(data);
-    } catch (e) {
-      console.error(e);
-    }
+    const path = `/predict/match/${matchId}`;
+    await withPremiumFetch(
+      path,
+      () => authenticatedFetch(`http://localhost:8000${path}`, path),
+      (data) => setPredictionData(data),
+      () => setPredictionData(null),
+    );
   };
 
   // Fetch tactical breakdown results
   const fetchTacticalBreakdown = async (matchId: string) => {
-    setBreakdownData(null);
-    try {
-      const data = await authenticatedFetch(
-        `http://localhost:8000/tactical/match/${matchId}`,
-        `/tactical/match/${matchId}`
-      );
-      setBreakdownData(data);
-    } catch (e) {
-      console.error(e);
-    }
+    const path = `/tactical/match/${matchId}`;
+    await withPremiumFetch(
+      path,
+      () => authenticatedFetch(`http://localhost:8000${path}`, path),
+      (data) => setBreakdownData(data),
+      () => setBreakdownData(null),
+    );
   };
 
   // Fetch match highlights
   const fetchHighlights = async (matchId: string) => {
-    setHighlightsData([]);
-    try {
-      const data = await authenticatedFetch(
-        `http://localhost:8000/highlights/match/${matchId}`,
-        `/highlights/match/${matchId}`
-      );
-      setHighlightsData(data.highlights);
-    } catch (e) {
-      console.error(e);
-    }
+    const path = `/highlights/match/${matchId}`;
+    await withPremiumFetch(
+      path,
+      () => authenticatedFetch(`http://localhost:8000${path}`, path),
+      (data) => setHighlightsData(data.highlights || []),
+      () => setHighlightsData([]),
+    );
   };
 
-  // Hook datasets based on page loading
+  const isUnlocked = (path: string) => Boolean(unlockedResources[path] || receipts[path]);
+
+  // Re-load already-unlocked premium datasets when path/target changes
   useEffect(() => {
     if (currentPath === '/players' && selectedPlayer) {
-      fetchClustering(selectedPlayer);
+      const path = `/cluster/player/${selectedPlayer}`;
+      if (isUnlocked(path)) fetchClustering(selectedPlayer);
+      else setPlayerClusterData(null);
     } else if (currentPath === '/analyst' && selectedMatchId) {
-      fetchPrediction(selectedMatchId);
-      fetchTacticalBreakdown(selectedMatchId);
+      const predictPath = `/predict/match/${selectedMatchId}`;
+      const tacticalPath = `/tactical/match/${selectedMatchId}`;
+      if (isUnlocked(predictPath)) fetchPrediction(selectedMatchId);
+      else setPredictionData(null);
+      if (isUnlocked(tacticalPath)) fetchTacticalBreakdown(selectedMatchId);
+      else setBreakdownData(null);
     } else if (currentPath === '/highlights' && selectedMatchId) {
-      fetchHighlights(selectedMatchId);
+      const path = `/highlights/match/${selectedMatchId}`;
+      if (isUnlocked(path)) fetchHighlights(selectedMatchId);
+      else setHighlightsData([]);
     }
   }, [currentPath, selectedPlayer, selectedMatchId]);
 
@@ -905,50 +919,63 @@ export default function App() {
                 <div>
                   <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ OUTCOME_PREDICTION ]</h3>
 
-                  {!predictionData ? (
-                    <div className="flex flex-col items-center justify-center h-48">
-                      <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
-                      <span className="mono text-[0.6rem] text-neutral-500">REQUESTING ENGINES...</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="space-y-4">
-                        <div>
-                          <div className="flex justify-between text-[0.7rem] mono mb-1.5">
-                            <span>{predictionData.home_team.toUpperCase()}_WIN</span>
-                            <span className="text-[#D9622B] font-semibold">{predictionData.probabilities.home_win}%</span>
+                  {(() => {
+                    const path = `/predict/match/${selectedMatchId}`;
+                    if (premiumLoading[path]) return <LoadingState label="REQUESTING ENGINES..." />;
+                    if (premiumError[path]) {
+                      return <ErrorState message={premiumError[path]} onRetry={() => fetchPrediction(selectedMatchId)} />;
+                    }
+                    if (!predictionData) {
+                      return (
+                        <LockedPreview
+                          title="AI MATCH PREDICTION"
+                          description="Unlock form-weighted win probabilities and an AI scoreline writeup for this fixture."
+                          amountUsdc="0.05"
+                          onUnlock={() => fetchPrediction(selectedMatchId)}
+                        />
+                      );
+                    }
+                    return (
+                      <div className="space-y-6">
+                        <div className="space-y-4">
+                          <div>
+                            <div className="flex justify-between text-[0.7rem] mono mb-1.5">
+                              <span>{predictionData.home_team.toUpperCase()}_WIN</span>
+                              <span className="text-[#D9622B] font-semibold">{predictionData.probabilities.home_win}%</span>
+                            </div>
+                            <div className="h-[2px] bg-neutral-900 overflow-hidden">
+                              <div className="h-full bg-[#D9622B]" style={{ width: `${predictionData.probabilities.home_win}%` }} />
+                            </div>
                           </div>
-                          <div className="h-[2px] bg-neutral-900 overflow-hidden">
-                            <div className="h-full bg-[#D9622B]" style={{ width: `${predictionData.probabilities.home_win}%` }} />
+
+                          <div>
+                            <div className="flex justify-between text-[0.7rem] mono mb-1.5">
+                              <span>{predictionData.away_team.toUpperCase()}_WIN</span>
+                              <span className="text-white font-semibold">{predictionData.probabilities.away_win}%</span>
+                            </div>
+                            <div className="h-[2px] bg-neutral-900 overflow-hidden">
+                              <div className="h-full bg-neutral-400" style={{ width: `${predictionData.probabilities.away_win}%` }} />
+                            </div>
                           </div>
                         </div>
 
-                        <div>
-                          <div className="flex justify-between text-[0.7rem] mono mb-1.5">
-                            <span>{predictionData.away_team.toUpperCase()}_WIN</span>
-                            <span className="text-white font-semibold">{predictionData.probabilities.away_win}%</span>
-                          </div>
-                          <div className="h-[2px] bg-neutral-900 overflow-hidden">
-                            <div className="h-full bg-neutral-400" style={{ width: `${predictionData.probabilities.away_win}%` }} />
-                          </div>
+                        <div className="border-t border-[#2A2A28] pt-4">
+                          <div className="mono text-[0.55rem] text-neutral-500 mb-2">AI_SUMMARY_WRITEUP:</div>
+                          <p className="text-[0.75rem] text-neutral-300 leading-relaxed font-jetbrains">
+                            {predictionData.summary}
+                          </p>
                         </div>
                       </div>
-
-                      <div className="border-t border-[#2A2A28] pt-4">
-                        <div className="mono text-[0.55rem] text-neutral-500 mb-2">AI_SUMMARY_WRITEUP:</div>
-                        <p className="text-[0.75rem] text-neutral-300 leading-relaxed font-jetbrains">
-                          {predictionData.summary}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 <div className="border-t border-[#2A2A28] pt-4 mt-6">
                   {receipts[`/predict/match/${selectedMatchId}`] ? (
-                    <div className="mono text-[0.55rem] text-[#D9622B] uppercase">
-                      SETTLED · 0.05 USDC · Base Sepolia · Tx_{receipts[`/predict/match/${selectedMatchId}`].tx.slice(0, 10)}...
-                    </div>
+                    <PaymentBadge
+                      amountLabel="0.05 USDC"
+                      tx={receipts[`/predict/match/${selectedMatchId}`].tx}
+                    />
                   ) : (
                     <div className="mono text-[0.55rem] text-neutral-500">
                       STATUS: PENDING_MICROPAYMENT
@@ -962,45 +989,58 @@ export default function App() {
                 <div className="flex-1 flex flex-col min-h-0">
                   <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ POST_MATCH_TACTICAL_BREAKDOWN ]</h3>
 
-                  {!breakdownData ? (
-                    <div className="flex flex-col items-center justify-center py-12">
-                      <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
-                      <span className="mono text-[0.6rem] text-neutral-500">COMPILING TELEMETRY STATS...</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-4 flex-grow overflow-y-auto max-h-[350px] pr-2">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-black/30 p-4 border border-[#2A2A28] rounded mb-4 text-[0.65rem] mono">
-                        <div>
-                          <div className="text-neutral-500 uppercase">POSSESSION</div>
-                          <div className="text-white font-bold">{breakdownData.stats_snapshot.possession.home}% / {breakdownData.stats_snapshot.possession.away}%</div>
+                  {(() => {
+                    const path = `/tactical/match/${selectedMatchId}`;
+                    if (premiumLoading[path]) return <LoadingState label="COMPILING TELEMETRY STATS..." />;
+                    if (premiumError[path]) {
+                      return <ErrorState message={premiumError[path]} onRetry={() => fetchTacticalBreakdown(selectedMatchId)} />;
+                    }
+                    if (!breakdownData) {
+                      return (
+                        <LockedPreview
+                          title="TACTICAL BREAKDOWN"
+                          description="Pay to unlock a post-match formation writeup with shot, possession, and set-piece telemetry."
+                          amountUsdc="0.10"
+                          onUnlock={() => fetchTacticalBreakdown(selectedMatchId)}
+                        />
+                      );
+                    }
+                    return (
+                      <div className="space-y-4 flex-grow overflow-y-auto max-h-[350px] pr-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-black/30 p-4 border border-[#2A2A28] rounded mb-4 text-[0.65rem] mono">
+                          <div>
+                            <div className="text-neutral-500 uppercase">POSSESSION</div>
+                            <div className="text-white font-bold">{breakdownData.stats_snapshot.possession.home}% / {breakdownData.stats_snapshot.possession.away}%</div>
+                          </div>
+                          <div>
+                            <div className="text-neutral-500 uppercase">SHOTS (ON_TARGET)</div>
+                            <div className="text-white font-bold">{breakdownData.stats_snapshot.shots.home}({breakdownData.stats_snapshot.shots_on_target.home})</div>
+                          </div>
+                          <div>
+                            <div className="text-neutral-500 uppercase">PASS_ACCURACY</div>
+                            <div className="text-white font-bold">{breakdownData.stats_snapshot.pass_accuracy.home}%</div>
+                          </div>
+                          <div>
+                            <div className="text-neutral-500 uppercase">CORNERS</div>
+                            <div className="text-[#D9622B] font-bold">{breakdownData.stats_snapshot.corners.home} / {breakdownData.stats_snapshot.corners.away}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-neutral-500 uppercase">SHOTS (ON_TARGET)</div>
-                          <div className="text-white font-bold">{breakdownData.stats_snapshot.shots.home}({breakdownData.stats_snapshot.shots_on_target.home})</div>
-                        </div>
-                        <div>
-                          <div className="text-neutral-500 uppercase">PASS_ACCURACY</div>
-                          <div className="text-white font-bold">{breakdownData.stats_snapshot.pass_accuracy.home}%</div>
-                        </div>
-                        <div>
-                          <div className="text-neutral-500 uppercase">CORNERS</div>
-                          <div className="text-[#D9622B] font-bold">{breakdownData.stats_snapshot.corners.home} / {breakdownData.stats_snapshot.corners.away}</div>
-                        </div>
-                      </div>
 
-                      <p className="text-[0.75rem] text-neutral-300 leading-relaxed font-jetbrains whitespace-pre-wrap">
-                        {breakdownData.tactical_breakdown}
-                      </p>
-                    </div>
-                  )}
+                        <p className="text-[0.75rem] text-neutral-300 leading-relaxed font-jetbrains whitespace-pre-wrap">
+                          {breakdownData.tactical_breakdown}
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="border-t border-[#2A2A28] pt-4 mt-6 flex justify-between items-center">
                   <span className="mono text-[0.6rem] text-neutral-500">USDC_FACILITATOR: CIRCLE_CCTP</span>
                   {receipts[`/tactical/match/${selectedMatchId}`] && (
-                    <span className="mono text-[0.55rem] px-2 py-0.5 border border-[#D9622B]/30 bg-[#D9622B]/5 text-[#D9622B] rounded">
-                      SETTLED · 0.10 USDC · BASE
-                    </span>
+                    <PaymentBadge
+                      amountLabel="0.10 USDC"
+                      tx={receipts[`/tactical/match/${selectedMatchId}`].tx}
+                    />
                   )}
                 </div>
               </div>
@@ -1103,62 +1143,79 @@ export default function App() {
 
               {/* Center results pane */}
               <div className="lg:col-span-2 border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between min-h-[300px]">
-
-                {!playerClusterData ? (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center">
-                    <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
-                    <span className="mono text-[0.65rem] text-neutral-500">RETRIEVING MULTIVARIATE DATA...</span>
-                  </div>
-                ) : (
-                  <div className="space-y-6 flex-grow flex flex-col justify-between">
-                    <div>
-                      <div className="flex justify-between items-start border-b border-[#2A2A28] pb-3">
-                        <div>
-                          <h2 className="text-[1.1rem] font-bold text-white uppercase">{playerClusterData.player.name}</h2>
-                          <div className="mono text-[0.6rem] text-neutral-500 mt-1">
-                            NAT: {playerClusterData.player.nationality.toUpperCase()} · POSITION: {playerClusterData.player.position.toUpperCase()}
+                {(() => {
+                  const path = `/cluster/player/${selectedPlayer}`;
+                  if (premiumLoading[path]) {
+                    return <LoadingState label="RETRIEVING MULTIVARIATE DATA..." className="flex-1" />;
+                  }
+                  if (premiumError[path]) {
+                    return <ErrorState message={premiumError[path]} onRetry={() => fetchClustering(selectedPlayer)} />;
+                  }
+                  if (!playerClusterData) {
+                    const selectedMeta = players.find((p) => p.player_id === selectedPlayer);
+                    return (
+                      <LockedPreview
+                        title="PLAYER STYLE CLUSTER"
+                        description={`Unlock archetype + nearest neighbors for ${selectedMeta?.name || selectedPlayer}. Free PCA map stays visible below.`}
+                        amountUsdc="0.01"
+                        onUnlock={() => fetchClustering(selectedPlayer)}
+                      />
+                    );
+                  }
+                  return (
+                    <div className="space-y-6 flex-grow flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start border-b border-[#2A2A28] pb-3">
+                          <div>
+                            <h2 className="text-[1.1rem] font-bold text-white uppercase">{playerClusterData.player.name}</h2>
+                            <div className="mono text-[0.6rem] text-neutral-500 mt-1">
+                              NAT: {playerClusterData.player.nationality.toUpperCase()} · POSITION: {playerClusterData.player.position.toUpperCase()}
+                            </div>
                           </div>
+
+                          {receipts[path] && (
+                            <PaymentBadge amountLabel="0.01 USDC" tx={receipts[path].tx} />
+                          )}
                         </div>
 
-                        {receipts[`/cluster/player/${selectedPlayer}`] && (
-                          <span className="mono text-[0.55rem] px-2 py-0.5 border border-[#D9622B]/30 bg-[#D9622B]/5 text-[#D9622B] rounded">
-                            SETTLED · 0.01 USDC
-                          </span>
-                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                          <div>
+                            <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-2">ARCHETYPE_CENTROID</div>
+                            <div className="border border-[#D9622B]/20 bg-[#D9622B]/5 rounded p-3 text-[0.75rem] font-bold text-[#D9622B] tracking-wide">
+                              {playerClusterData.player.archetype.toUpperCase()}
+                            </div>
+                            <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed mt-2.5">
+                              Assigned based on Goals, Assists, Key Passes, and Tackles per 90 telemetry.
+                            </p>
+                          </div>
+
+                          <div>
+                            <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-2">NEAREST_NEIGHBOR_MATRICES</div>
+                            <div className="space-y-1.5">
+                              {playerClusterData.similar_players.slice(0, 3).map((p: any) => (
+                                <button
+                                  type="button"
+                                  key={p.player_id}
+                                  onClick={() => setSelectedPlayer(p.player_id)}
+                                  className="w-full flex justify-between items-center text-[0.7rem] bg-[#0E0E0E] border border-[#2A2A28] px-3 py-2 rounded hover:border-[#D9622B]/40 text-left"
+                                >
+                                  <span className="font-semibold text-white">{p.name}</span>
+                                  <span className="mono text-[0.6rem] text-[#D9622B]">DIST: {p.similarity_distance.toFixed(3)}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                        <div>
-                          <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-2">ARCHETYPE_CENTROID</div>
-                          <div className="border border-[#D9622B]/20 bg-[#D9622B]/5 rounded p-3 text-[0.75rem] font-bold text-[#D9622B] tracking-wide">
-                            {playerClusterData.player.archetype.toUpperCase()}
-                          </div>
-                          <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed mt-2.5">
-                            Assigned based on Goals, Assists, Key Passes, and Tackles per 90 telemetry.
-                          </p>
-                        </div>
-
-                        <div>
-                          <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-2">NEAREST_NEIGHBOR_MATRICES</div>
-                          <div className="space-y-1.5">
-                            {playerClusterData.similar_players.slice(0, 3).map((p: any) => (
-                              <div key={p.player_id} className="flex justify-between items-center text-[0.7rem] bg-[#0E0E0E] border border-[#2A2A28] px-3 py-2 rounded">
-                                <span className="font-semibold text-white">{p.name}</span>
-                                <span className="mono text-[0.6rem] text-[#D9622B]">DIST: {p.similarity_distance.toFixed(3)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                      <div className="border-t border-[#2A2A28] pt-4 flex justify-between items-center text-[0.65rem] mono text-neutral-500">
+                        <span>VAL: €{playerClusterData.player.market_value_m}M</span>
+                        <span>MIN: {playerClusterData.player.minutes_played}m</span>
+                        <span>GOALS/90: {((playerClusterData.player.goals / playerClusterData.player.minutes_played) * 90).toFixed(2)}</span>
                       </div>
                     </div>
-
-                    <div className="border-t border-[#2A2A28] pt-4 flex justify-between items-center text-[0.65rem] mono text-neutral-500">
-                      <span>VAL: €{playerClusterData.player.market_value_m}M</span>
-                      <span>MIN: {playerClusterData.player.minutes_played}m</span>
-                      <span>GOALS/90: {((playerClusterData.player.goals / playerClusterData.player.minutes_played) * 90).toFixed(2)}</span>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
             </div>
@@ -1253,65 +1310,74 @@ export default function App() {
             </div>
 
             <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+              {(() => {
+                const path = `/highlights/match/${selectedMatchId}`;
+                if (premiumLoading[path]) {
+                  return <LoadingState label="EXTRACTING DECIBEL SPIKES..." className="py-20" />;
+                }
+                if (premiumError[path]) {
+                  return <ErrorState message={premiumError[path]} onRetry={() => fetchHighlights(selectedMatchId)} />;
+                }
+                if (highlightsData.length === 0) {
+                  return (
+                    <LockedPreview
+                      title="HIGHLIGHT TELEMETRY"
+                      description="Unlock RMS loudness peak clips for this match. Audio analysis runs after micropayment settles."
+                      amountUsdc="0.08"
+                      onUnlock={() => fetchHighlights(selectedMatchId)}
+                      className="py-8"
+                    />
+                  );
+                }
+                return (
+                  <div className="space-y-8">
+                    <div className="flex justify-end">
+                      {receipts[path] && <PaymentBadge amountLabel="0.08 USDC" tx={receipts[path].tx} />}
+                    </div>
+                    <div className="border border-[#2A2A28] bg-black/40 p-4 rounded">
+                      <div className="mono text-[0.55rem] text-neutral-500 mb-2 uppercase">AUDIO_RMS_ENERGY (SPIKES LOCATED)</div>
+                      <svg className="w-full h-16" viewBox="0 0 1000 64" preserveAspectRatio="none">
+                        <path
+                          d="M 0 32 L 50 28 L 100 35 L 150 20 L 180 8 L 220 30 L 300 27 L 400 33 L 500 25 L 580 6 L 650 28 L 750 31 L 820 9 L 900 29 L 1000 32"
+                          fill="none"
+                          stroke="rgba(217, 98, 43, 0.35)"
+                          strokeWidth="1.5"
+                        />
+                        <circle cx="180" cy="12" r="4" fill="#D9622B" />
+                        <line x1="180" y1="12" x2="180" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
+                        <circle cx="580" cy="8" r="4" fill="#D9622B" />
+                        <line x1="580" y1="8" x2="580" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
+                        <circle cx="820" cy="10" r="4" fill="#D9622B" />
+                        <line x1="820" y1="10" x2="820" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
+                      </svg>
+                    </div>
 
-              {highlightsData.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <div className="w-8 h-8 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mb-4" />
-                  <span className="mono text-[0.65rem] text-neutral-500">EXTRACTING DECIBEL SPIKES...</span>
-                </div>
-              ) : (
-                <div className="space-y-8">
-                  {/* Waveform graph overlay */}
-                  <div className="border border-[#2A2A28] bg-black/40 p-4 rounded">
-                    <div className="mono text-[0.55rem] text-neutral-500 mb-2 uppercase">AUDIO_RMS_ENERGY (SPIKES LOCATED)</div>
-                    <svg className="w-full h-16" viewBox="0 0 1000 64" preserveAspectRatio="none">
-                      <path
-                        d={`M 0 32 ${Array.from({ length: 100 }, (_, i) => {
-                          const isPeak = i === 18 || i === 58 || i === 82;
-                          const height = isPeak ? 15 + Math.random() * 35 : 10 + Math.random() * 10;
-                          return `L ${i * 10} ${32 - height} L ${i * 10 + 5} ${32 + height}`;
-                        }).join(' ')} L 1000 32`}
-                        fill="none"
-                        stroke="rgba(217, 98, 43, 0.2)"
-                        strokeWidth="1.5"
-                      />
-                      <circle cx="180" cy="12" r="4" fill="#D9622B" />
-                      <line x1="180" y1="12" x2="180" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
-
-                      <circle cx="580" cy="8" r="4" fill="#D9622B" />
-                      <line x1="580" y1="8" x2="580" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
-
-                      <circle cx="820" cy="10" r="4" fill="#D9622B" />
-                      <line x1="820" y1="10" x2="820" y2="64" stroke="#D9622B" strokeDasharray="3,3" />
-                    </svg>
-                  </div>
-
-                  {/* Highlights Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {highlightsData.map((clip) => (
-                      <div key={clip.id} className="border border-[#2A2A28] bg-[#0E0E0E] rounded overflow-hidden flex flex-col justify-between hover:border-[#D9622B]/30 transition">
-                        <div className="relative aspect-video bg-neutral-900">
-                          <video
-                            src={clip.video_url}
-                            controls
-                            poster={clip.thumbnail_url}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="p-4 space-y-2">
-                          <div className="flex justify-between items-center text-[0.65rem] mono text-neutral-500">
-                            <span>TIMESTAMP: {intToTime(clip.timestamp)}</span>
-                            <span>DURATION: {clip.duration}s</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {highlightsData.map((clip) => (
+                        <div key={clip.id} className="border border-[#2A2A28] bg-[#0E0E0E] rounded overflow-hidden flex flex-col justify-between hover:border-[#D9622B]/30 transition">
+                          <div className="relative aspect-video bg-neutral-900">
+                            <video
+                              src={clip.video_url}
+                              controls
+                              poster={clip.thumbnail_url}
+                              className="w-full h-full object-cover"
+                            />
                           </div>
-                          <p className="text-[0.7rem] text-neutral-300 leading-relaxed font-jetbrains">
-                            {clip.description}
-                          </p>
+                          <div className="p-4 space-y-2">
+                            <div className="flex justify-between items-center text-[0.65rem] mono text-neutral-500">
+                              <span>TIMESTAMP: {intToTime(clip.timestamp)}</span>
+                              <span>DURATION: {clip.duration}s</span>
+                            </div>
+                            <p className="text-[0.7rem] text-neutral-300 leading-relaxed font-jetbrains">
+                              {clip.description}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         )}
@@ -1406,77 +1472,18 @@ export default function App() {
         <span className="mono">SETTLEMENTS: CIRCLE CCTP EVM v2</span>
       </footer>
 
-      {/* Gated 402 Paywall Modal Dialog */}
       {paywallRequired && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 select-none font-jetbrains animate-fade-in">
-          <div className="max-w-md w-full border border-[#D9622B]/30 bg-[#171715] rounded p-6 shadow-2xl space-y-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-[2px] bg-[#D9622B]" />
-
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 border border-neutral-800 bg-[#D9622B]/5 flex items-center justify-center text-[#D9622B] text-[1.2rem] font-bold">
-                ▲
-              </div>
-              <div className="space-y-1">
-                <h3 className="mono text-[0.85rem] font-bold text-white tracking-wider">HTTP 402 PAYMENT REQUIRED</h3>
-                <div className="mono text-[0.6rem] text-neutral-500">SCHEME: EIP-3009 (EXACT) · NETWORK: BASE SEPOLIA</div>
-              </div>
-            </div>
-
-            <div className="border border-[#2A2A28] bg-black/40 p-4 rounded space-y-3 text-[0.7rem] mono">
-              <div className="flex justify-between border-b border-neutral-900 pb-1.5">
-                <span className="text-neutral-500">RESOURCE_GATED:</span>
-                <span className="text-white truncate max-w-[200px]">{paywallRequired.resource}</span>
-              </div>
-              <div className="flex justify-between border-b border-neutral-900 pb-1.5">
-                <span className="text-neutral-500">PAY_TO_ADDRESS:</span>
-                <span className="text-white font-semibold">0x9ed482f...a924</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">REQUIRED_USDC:</span>
-                <span className="text-[#D9622B] font-bold">{parseFloat(paywallRequired.amount) / 1000000} USDC</span>
-              </div>
-            </div>
-
-            <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed">
-              This resource requires stablecoin permit micropayment on Base Sepolia. The AI Analyst will verify the settlement signature instantly.
-            </p>
-
-            {paymentStatus === '' ? (
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={() => {
-                    const rejectFn = paywallRequired.reject;
-                    setPaywallRequired(null);
-                    rejectFn(new Error('User aborted payment'));
-                  }}
-                  className="mono border border-neutral-800 text-neutral-400 py-2.5 hover:bg-neutral-900 transition tracking-wider text-[0.7rem] rounded"
-                >
-                  ABORT_QUERY
-                </button>
-                <button
-                  onClick={handlePaywallSettle}
-                  className="mono bg-[#D9622B] text-white py-2.5 hover:bg-[#D9622B]/90 transition tracking-wider text-[0.7rem] font-bold rounded cursor-pointer"
-                >
-                  AUTHORIZE_&_PAY
-                </button>
-              </div>
-            ) : (
-              <div className="border border-neutral-800 bg-[#0E0E0E] p-4 rounded text-center space-y-2">
-                {paymentStatus === 'signing' ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mx-auto mb-2" />
-                    <div className="mono text-[0.65rem] text-neutral-500 uppercase tracking-widest">SIGNING_EIP3009_PERMIT_PROOF...</div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-green-500 text-[1.1rem] mb-1">✔ SETTLED</div>
-                    <div className="mono text-[0.55rem] text-neutral-500 uppercase truncate">TX: {paymentTx}</div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <PaywallModal
+          paywall={paywallRequired}
+          paymentStatus={paymentStatus}
+          paymentTx={paymentTx}
+          onAbort={() => {
+            const rejectFn = paywallRequired.reject;
+            setPaywallRequired(null);
+            rejectFn(new Error('User aborted payment'));
+          }}
+          onSettle={handlePaywallSettle}
+        />
       )}
     </div>
   );
