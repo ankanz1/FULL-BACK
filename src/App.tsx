@@ -35,6 +35,56 @@ interface Highlight {
   thumbnail_url: string;
 }
 
+interface Team {
+  id: string;
+  name: string;
+  code: string;
+  flag: string;
+}
+
+interface MatchStats {
+  match_id: string;
+  home_team: Team;
+  away_team: Team;
+  status: string;
+  score: { home: number; away: number };
+  stats?: any;
+  events?: any[];
+}
+
+interface GroupStanding {
+  position: number;
+  team: Team;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goals_for: number;
+  goals_against: number;
+  points: number;
+}
+
+interface TeamForm {
+  team_id: string;
+  team_name: string;
+  form: string;
+  recent_matches: Array<{
+    match_id: string;
+    opponent: string;
+    score: string;
+    result: "W" | "D" | "L";
+    date: string;
+  }>;
+  goals_scored: number;
+  goals_conceded: number;
+  clean_sheets: number;
+}
+
+interface PlayerStats {
+  top_scorers: Player[];
+  top_assists: Player[];
+}
+
 
 
 export default function App() {
@@ -63,6 +113,16 @@ export default function App() {
   const [predictionData, setPredictionData] = useState<any>(null);
   const [breakdownData, setBreakdownData] = useState<any>(null);
   const [highlightsData, setHighlightsData] = useState<Highlight[]>([]);
+
+  // New dashboard states
+  const [activeTab, setActiveTab] = useState<string>('overview'); // 'overview' | 'table' | 'fixtures' | 'player-stats' | 'team-stats'
+  const [selectedGroup, setSelectedGroup] = useState<string>('A');
+  const [matches, setMatches] = useState<MatchStats[]>([]);
+  const [standings, setStandings] = useState<GroupStanding[]>([]);
+  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
+  const [teamForms, setTeamForms] = useState<Record<string, TeamForm>>({});
+  const [dashboardLoading, setDashboardLoading] = useState<Record<string, boolean>>({});
+  const [dashboardError, setDashboardError] = useState<Record<string, string>>({});
 
   // Paywall states
   const [paywallRequired, setPaywallRequired] = useState<PaywallRequest | null>(null);
@@ -231,6 +291,74 @@ export default function App() {
       }
     } catch (e) {
       console.error('Error fetching players:', e);
+    }
+  };
+
+  // Fetch all matches (fixtures)
+  const fetchMatches = async () => {
+    const key = 'matches';
+    setDashboardLoading(prev => ({ ...prev, [key]: true }));
+    setDashboardError(prev => ({ ...prev, [key]: '' }));
+    try {
+      const res = await fetch('http://localhost:8000/matches');
+      if (!res.ok) throw new Error('Failed to fetch matches');
+      const data = await res.json();
+      setMatches(data);
+    } catch (e) {
+      setDashboardError(prev => ({ ...prev, [key]: (e as Error).message }));
+    } finally {
+      setDashboardLoading(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  // Fetch standings for a group
+  const fetchStandings = async (group: string) => {
+    const key = `standings-${group}`;
+    setDashboardLoading(prev => ({ ...prev, [key]: true }));
+    setDashboardError(prev => ({ ...prev, [key]: '' }));
+    try {
+      const res = await fetch(`http://localhost:8000/standings/${group}`);
+      if (!res.ok) throw new Error(`Failed to fetch standings for group ${group}`);
+      const data = await res.json();
+      setStandings(data);
+    } catch (e) {
+      setDashboardError(prev => ({ ...prev, [key]: (e as Error).message }));
+    } finally {
+      setDashboardLoading(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  // Fetch player stats (top scorers/assists)
+  const fetchPlayerStats = async () => {
+    const key = 'player-stats';
+    setDashboardLoading(prev => ({ ...prev, [key]: true }));
+    setDashboardError(prev => ({ ...prev, [key]: '' }));
+    try {
+      const res = await fetch('http://localhost:8000/player-stats');
+      if (!res.ok) throw new Error('Failed to fetch player stats');
+      const data = await res.json();
+      setPlayerStats(data);
+    } catch (e) {
+      setDashboardError(prev => ({ ...prev, [key]: (e as Error).message }));
+    } finally {
+      setDashboardLoading(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  // Fetch team form for a specific team
+  const fetchTeamForm = async (teamId: string) => {
+    const key = `team-form-${teamId}`;
+    setDashboardLoading(prev => ({ ...prev, [key]: true }));
+    setDashboardError(prev => ({ ...prev, [key]: '' }));
+    try {
+      const res = await fetch(`http://localhost:8000/team-form/${teamId}`);
+      if (!res.ok) throw new Error(`Failed to fetch form for team ${teamId}`);
+      const data = await res.json();
+      setTeamForms(prev => ({ ...prev, [teamId]: data }));
+    } catch (e) {
+      setDashboardError(prev => ({ ...prev, [key]: (e as Error).message }));
+    } finally {
+      setDashboardLoading(prev => ({ ...prev, [key]: false }));
     }
   };
 
@@ -412,6 +540,39 @@ export default function App() {
       else setHighlightsData([]);
     }
   }, [currentPath, selectedPlayer, selectedMatchId]);
+
+  // Fetch dashboard data based on active tab and selected group
+  useEffect(() => {
+    if (currentPath !== '/dashboard') return;
+
+    // Always fetch matches for overview and fixtures
+    if (activeTab === 'overview' || activeTab === 'fixtures') {
+      if (matches.length === 0) fetchMatches();
+    }
+
+    // Fetch standings for table or overview
+    if (activeTab === 'table' || activeTab === 'overview') {
+      fetchStandings(selectedGroup);
+    }
+
+    // Fetch player stats for player-stats tab
+    if (activeTab === 'player-stats') {
+      if (!playerStats) fetchPlayerStats();
+    }
+
+    // Fetch team forms for team-stats tab (fetch for all teams in standings)
+    if (activeTab === 'team-stats') {
+      if (standings.length > 0) {
+        standings.forEach(standing => {
+          if (!teamForms[standing.team.id]) {
+            fetchTeamForm(standing.team.id);
+          }
+        });
+      } else {
+        fetchStandings(selectedGroup); // first get standings to get team IDs
+      }
+    }
+  }, [currentPath, activeTab, selectedGroup]);
 
   // Handle chat submission
   const handleChatSubmit = async (e: React.FormEvent) => {
@@ -702,188 +863,402 @@ export default function App() {
                 <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ STAGE_GROUP_A_&_B ]</span>
                 <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">LIVE SCORES &amp; STANDINGS</h1>
               </div>
-              <span className="mono text-[0.6rem] text-neutral-500">REFRESHED: LIVE TELEMETRY</span>
+              <span className="mono text-[0.6rem] text-neutral-500">REFRESHED: 15/07/2026 LIVE TELEMETRY</span>
             </div>
 
-            {/* Free Standings tables */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-              {/* Group A */}
-              <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
-                <div className="flex justify-between items-center mb-4 border-b border-[#2A2A28]/50 pb-2">
-                  <span className="font-syncopate text-[0.75rem] font-bold tracking-widest text-white">GROUP A</span>
-                  <span className="mono text-[0.6rem] text-neutral-500">STAGE_ROUND_1</span>
-                </div>
-                <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
-                  <thead>
-                    <tr className="text-neutral-500 border-b border-[#2A2A28]">
-                      <th className="py-2">POS</th>
-                      <th className="py-2">TEAM</th>
-                      <th className="py-2 text-center">P</th>
-                      <th className="py-2 text-center">W-D-L</th>
-                      <th className="py-2 text-center">GD</th>
-                      <th className="py-2 text-right">PTS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#2A2A28]/50">
-                    <tr className="hover:bg-neutral-900/30">
-                      <td className="py-2.5 text-[#D9622B]">1</td>
-                      <td className="py-2.5 font-semibold text-white">🇩🇪 GERMANY</td>
-                      <td className="py-2.5 text-center">1</td>
-                      <td className="py-2.5 text-center">1-0-0</td>
-                      <td className="py-2.5 text-center">+2</td>
-                      <td className="py-2.5 text-right font-bold">3</td>
-                    </tr>
-                    <tr className="hover:bg-neutral-900/30">
-                      <td className="py-2.5 text-neutral-400">2</td>
-                      <td className="py-2.5 font-semibold text-white">🇺🇸 UNITED STATES</td>
-                      <td className="py-2.5 text-center">1</td>
-                      <td className="py-2.5 text-center">1-0-0</td>
-                      <td className="py-2.5 text-center">+1</td>
-                      <td className="py-2.5 text-right font-bold">3</td>
-                    </tr>
-                    <tr className="hover:bg-neutral-900/30">
-                      <td className="py-2.5 text-neutral-400">3</td>
-                      <td className="py-2.5 font-semibold text-white">🇨🇴 COLOMBIA</td>
-                      <td className="py-2.5 text-center">1</td>
-                      <td className="py-2.5 text-center">0-0-1</td>
-                      <td className="py-2.5 text-center">-1</td>
-                      <td className="py-2.5 text-right font-bold">0</td>
-                    </tr>
-                    <tr className="hover:bg-neutral-900/30">
-                      <td className="py-2.5 text-neutral-400">4</td>
-                      <td className="py-2.5 font-semibold text-white">🇯🇵 JAPAN</td>
-                      <td className="py-2.5 text-center">1</td>
-                      <td className="py-2.5 text-center">0-0-1</td>
-                      <td className="py-2.5 text-center">-2</td>
-                      <td className="py-2.5 text-right font-bold">0</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Group B */}
-              <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
-                <div className="flex justify-between items-center mb-4 border-b border-[#2A2A28]/50 pb-2">
-                  <span className="font-syncopate text-[0.75rem] font-bold tracking-widest text-white">GROUP B</span>
-                  <span className="mono text-[0.6rem] text-neutral-500">STAGE_ROUND_1</span>
-                </div>
-                <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
-                  <thead>
-                    <tr className="text-neutral-500 border-b border-[#2A2A28]">
-                      <th className="py-2">POS</th>
-                      <th className="py-2">TEAM</th>
-                      <th className="py-2 text-center">P</th>
-                      <th className="py-2 text-center">W-D-L</th>
-                      <th className="py-2 text-center">GD</th>
-                      <th className="py-2 text-right">PTS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#2A2A28]/50">
-                    <tr className="hover:bg-neutral-900/30">
-                      <td className="py-2.5 text-[#D9622B]">1</td>
-                      <td className="py-2.5 font-semibold text-white">🇫🇷 FRANCE</td>
-                      <td className="py-2.5 text-center">1</td>
-                      <td className="py-2.5 text-center">1-0-0</td>
-                      <td className="py-2.5 text-center">+1</td>
-                      <td className="py-2.5 text-right font-bold">3</td>
-                    </tr>
-                    <tr className="hover:bg-neutral-900/30">
-                      <td className="py-2.5 text-neutral-400">2</td>
-                      <td className="py-2.5 font-semibold text-white">🇦🇷 ARGENTINA</td>
-                      <td className="py-2.5 text-center">1</td>
-                      <td className="py-2.5 text-center">0-1-0</td>
-                      <td className="py-2.5 text-center">0</td>
-                      <td className="py-2.5 text-right font-bold">1</td>
-                    </tr>
-                    <tr className="hover:bg-neutral-900/30">
-                      <td className="py-2.5 text-neutral-400">3</td>
-                      <td className="py-2.5 font-semibold text-white">🏴󠁧󠁢󠁥󠁮󠁧󠁿 ENGLAND</td>
-                      <td className="py-2.5 text-center">1</td>
-                      <td className="py-2.5 text-center">0-1-0</td>
-                      <td className="py-2.5 text-center">0</td>
-                      <td className="py-2.5 text-right font-bold">1</td>
-                    </tr>
-                    <tr className="hover:bg-neutral-900/30">
-                      <td className="py-2.5 text-neutral-400">4</td>
-                      <td className="py-2.5 font-semibold text-white">🇲🇦 MOROCCO</td>
-                      <td className="py-2.5 text-center">1</td>
-                      <td className="py-2.5 text-center">0-0-1</td>
-                      <td className="py-2.5 text-center">-1</td>
-                      <td className="py-2.5 text-right font-bold">0</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
+            {/* Tab Navigation */}
+            <div className="border-b border-[#2A2A28]">
+              <nav role="tablist" className="flex gap-8">
+                {[
+                  { id: 'overview', label: 'Overview' },
+                  { id: 'table', label: 'Table' },
+                  { id: 'fixtures', label: 'Fixtures' },
+                  { id: 'player-stats', label: 'Player Stats' },
+                  { id: 'team-stats', label: 'Team Stats' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`pb-3 text-[0.75rem] uppercase tracking-widest font-semibold transition-colors relative ${
+                      activeTab === tab.id
+                        ? 'text-[#D9622B]'
+                        : 'text-[#8B8A85] hover:text-[#ECEAE3]'
+                    }`}
+                  >
+                    {tab.label}
+                    {activeTab === tab.id && (
+                      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#D9622B]" />
+                    )}
+                  </button>
+                ))}
+              </nav>
             </div>
 
-            {/* Match Board */}
-            <div>
-              <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ TODAY_FIXTURES ]</h3>
-              <div className="space-y-4">
-
-                {/* USA vs COL */}
-                <div className="border border-[#2A2A28] bg-[#171715]/20 p-6 rounded flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-6">
-                    <span className="mono text-[0.75rem] text-[#D9622B] font-bold">[ M001 ]</span>
-                    <div>
-                      <div className="text-[0.95rem] font-semibold text-white">🇺🇸 UNITED STATES vs 🇨🇴 COLOMBIA</div>
-                      <div className="mono text-[0.6rem] text-neutral-500 mt-1">GROUP A · STADIUM: COPA FIELD</div>
-                    </div>
+            {/* Tab Content */}
+            <div className="space-y-6">
+              {/* Overview Tab */}
+              {activeTab === 'overview' && (
+                <div className="space-y-8">
+                  {/* Live Matches */}
+                  <div>
+                    <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ LIVE_MATCHES ]</h3>
+                    {dashboardLoading['matches'] ? (
+                      <LoadingState label="Loading matches..." />
+                    ) : dashboardError['matches'] ? (
+                      <ErrorState message={dashboardError['matches']} onRetry={fetchMatches} />
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {matches.map((match) => (
+                          <div
+                            key={match.match_id}
+                            className="border border-[#2A2A28] bg-[#171715]/40 rounded p-4 hover:bg-[#171715]/60 transition-colors cursor-pointer"
+                            onClick={() => setSelectedMatchId(match.match_id)}
+                          >
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="mono text-[0.6rem] text-neutral-500">[ {match.match_id} ]</span>
+                              <span className={`mono text-[0.6rem] px-2 py-0.5 rounded ${
+                                match.status === 'Finished'
+                                  ? 'bg-neutral-700 text-neutral-300'
+                                  : 'bg-[#D9622B]/20 text-[#D9622B] animate-pulse'
+                              }`}>
+                                {match.status}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <div className="text-center">
+                                <div className="text-2xl">{match.home_team.flag}</div>
+                                <div className="mono text-[0.65rem] text-neutral-300 mt-1">{match.home_team.code}</div>
+                              </div>
+                              <div className="mono text-xl font-bold text-[#ECEAE3]">
+                                {match.score.home} - {match.score.away}
+                              </div>
+                              <div className="text-center">
+                                <div className="text-2xl">{match.away_team.flag}</div>
+                                <div className="mono text-[0.65rem] text-neutral-300 mt-1">{match.away_team.code}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-6">
-                    <div className="mono text-[0.9rem] font-bold text-[#D9622B] border border-[#D9622B]/20 bg-[#D9622B]/5 px-4 py-1.5 rounded">
-                      2 - 1
+
+                  {/* Standings Snippet */}
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase">[ GROUP {selectedGroup} STANDINGS ]</h3>
+                      <button
+                        onClick={() => setActiveTab('table')}
+                        className="mono text-[0.65rem] text-[#8B8A85] hover:text-[#D9622B] transition-colors"
+                      >
+                        View Full Table →
+                      </button>
                     </div>
-                    <div className="mono text-right text-[0.65rem] text-[#8B8A85]">
-                      <div>STATUS: FINISHED</div>
-                      <div>DATE: 2026-06-12</div>
-                    </div>
+                    {dashboardLoading[`standings-${selectedGroup}`] ? (
+                      <LoadingState label="Loading standings..." />
+                    ) : dashboardError[`standings-${selectedGroup}`] ? (
+                      <ErrorState message={dashboardError[`standings-${selectedGroup}`]} onRetry={() => fetchStandings(selectedGroup)} />
+                    ) : (
+                      <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-4">
+                        <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
+                          <thead>
+                            <tr className="text-neutral-500 border-b border-[#2A2A28]">
+                              <th className="py-2">POS</th>
+                              <th className="py-2">TEAM</th>
+                              <th className="py-2 text-center">P</th>
+                              <th className="py-2 text-center">W</th>
+                              <th className="py-2 text-center">D</th>
+                              <th className="py-2 text-center">L</th>
+                              <th className="py-2 text-center">GD</th>
+                              <th className="py-2 text-right">PTS</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#2A2A28]/50">
+                            {standings.slice(0, 4).map((standing) => (
+                              <tr key={standing.team.id} className="hover:bg-neutral-900/30">
+                                <td className="py-2.5 text-[#D9622B]">{standing.position}</td>
+                                <td className="py-2.5 font-semibold text-white">
+                                  {standing.team.flag} {standing.team.name}
+                                </td>
+                                <td className="py-2.5 text-center">{standing.played}</td>
+                                <td className="py-2.5 text-center">{standing.won}</td>
+                                <td className="py-2.5 text-center">{standing.drawn}</td>
+                                <td className="py-2.5 text-center">{standing.lost}</td>
+                                <td className="py-2.5 text-center">
+                                  {standing.goals_for - standing.goals_against > 0 ? '+' : ''}
+                                  {standing.goals_for - standing.goals_against}
+                                </td>
+                                <td className="py-2.5 text-right font-bold">{standing.points}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </div>
+              )}
 
-                {/* GER vs JPN */}
-                <div className="border border-[#2A2A28] bg-[#171715]/20 p-6 rounded flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-6">
-                    <span className="mono text-[0.75rem] text-[#D9622B] font-bold">[ M002 ]</span>
-                    <div>
-                      <div className="text-[0.95rem] font-semibold text-white">🇩🇪 GERMANY vs 🇯🇵 JAPAN</div>
-                      <div className="mono text-[0.6rem] text-neutral-500 mt-1">GROUP A · STADIUM: BERLIN ARENA</div>
-                    </div>
+              {/* Table Tab */}
+              {activeTab === 'table' && (
+                <div className="space-y-6">
+                  {/* Group Selector */}
+                  <div className="flex gap-2">
+                    {['A', 'B'].map((group) => (
+                      <button
+                        key={group}
+                        onClick={() => setSelectedGroup(group)}
+                        className={`mono text-[0.7rem] px-4 py-2 rounded border transition-colors ${
+                          selectedGroup === group
+                            ? 'border-[#D9622B] bg-[#D9622B]/10 text-[#D9622B]'
+                            : 'border-[#2A2A28] text-[#8B8A85] hover:border-[#ECEAE3] hover:text-[#ECEAE3]'
+                        }`}
+                      >
+                        GROUP {group}
+                      </button>
+                    ))}
                   </div>
-                  <div className="flex items-center gap-6">
-                    <div className="mono text-[0.9rem] font-bold text-[#D9622B] border border-[#D9622B]/20 bg-[#D9622B]/5 px-4 py-1.5 rounded">
-                      3 - 1
+
+                  {/* Standings Table */}
+                  {dashboardLoading[`standings-${selectedGroup}`] ? (
+                    <LoadingState label="Loading standings..." />
+                  ) : dashboardError[`standings-${selectedGroup}`] ? (
+                    <ErrorState message={dashboardError[`standings-${selectedGroup}`]} onRetry={() => fetchStandings(selectedGroup)} />
+                  ) : (
+                    <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+                      <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
+                        <thead>
+                          <tr className="text-neutral-500 border-b border-[#2A2A28]">
+                            <th className="py-2">POS</th>
+                            <th className="py-2">TEAM</th>
+                            <th className="py-2 text-center">P</th>
+                            <th className="py-2 text-center">W</th>
+                            <th className="py-2 text-center">D</th>
+                            <th className="py-2 text-center">L</th>
+                            <th className="py-2 text-center">GF</th>
+                            <th className="py-2 text-center">GA</th>
+                            <th className="py-2 text-center">GD</th>
+                            <th className="py-2 text-right">PTS</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#2A2A28]/50">
+                          {standings.map((standing) => (
+                            <tr key={standing.team.id} className="hover:bg-neutral-900/30">
+                              <td className="py-2.5 text-[#D9622B]">{standing.position}</td>
+                              <td className="py-2.5 font-semibold text-white">
+                                {standing.team.flag} {standing.team.name}
+                              </td>
+                              <td className="py-2.5 text-center">{standing.played}</td>
+                              <td className="py-2.5 text-center">{standing.won}</td>
+                              <td className="py-2.5 text-center">{standing.drawn}</td>
+                              <td className="py-2.5 text-center">{standing.lost}</td>
+                              <td className="py-2.5 text-center">{standing.goals_for}</td>
+                              <td className="py-2.5 text-center">{standing.goals_against}</td>
+                              <td className="py-2.5 text-center">
+                                {standing.goals_for - standing.goals_against > 0 ? '+' : ''}
+                                {standing.goals_for - standing.goals_against}
+                              </td>
+                              <td className="py-2.5 text-right font-bold">{standing.points}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                    <div className="mono text-right text-[0.65rem] text-[#8B8A85]">
-                      <div>STATUS: FINISHED</div>
-                      <div>DATE: 2026-06-13</div>
+                  )}
+                </div>
+              )}
+
+              {/* Fixtures Tab */}
+              {activeTab === 'fixtures' && (
+                <div className="space-y-6">
+                  {dashboardLoading['matches'] ? (
+                    <LoadingState label="Loading fixtures..." />
+                  ) : dashboardError['matches'] ? (
+                    <ErrorState message={dashboardError['matches']} onRetry={fetchMatches} />
+                  ) : (
+                    <div className="space-y-4">
+                      {matches.map((match) => (
+                        <div
+                          key={match.match_id}
+                          className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 hover:bg-[#171715]/60 transition-colors cursor-pointer"
+                          onClick={() => setSelectedMatchId(match.match_id)}
+                        >
+                          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                            <div className="flex items-center gap-6">
+                              <span className="mono text-[0.75rem] text-[#D9622B] font-bold">[ {match.match_id} ]</span>
+                              <div>
+                                <div className="flex items-center gap-4 text-[0.95rem] font-semibold text-white">
+                                  <span>{match.home_team.flag} {match.home_team.name}</span>
+                                  <span className="text-neutral-500">vs</span>
+                                  <span>{match.away_team.flag} {match.away_team.name}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-6">
+                              <div className="mono text-xl font-bold text-[#D9622B] border border-[#D9622B]/20 bg-[#D9622B]/5 px-4 py-2 rounded">
+                                {match.score.home} - {match.score.away}
+                              </div>
+                              <div className="flex flex-col items-end">
+                                <span className={`mono text-[0.65rem] px-2 py-0.5 rounded ${
+                                  match.status === 'Finished'
+                                    ? 'bg-neutral-700 text-neutral-300'
+                                    : 'bg-[#D9622B]/20 text-[#D9622B] animate-pulse'
+                                }`}>
+                                  {match.status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Player Stats Tab */}
+              {activeTab === 'player-stats' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Top Scorers */}
+                  <div className="space-y-4">
+                    <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase">[ TOP_SCORERS ]</h3>
+                    {dashboardLoading['player-stats'] ? (
+                      <LoadingState label="Loading player stats..." />
+                    ) : dashboardError['player-stats'] ? (
+                      <ErrorState message={dashboardError['player-stats']} onRetry={fetchPlayerStats} />
+                    ) : playerStats ? (
+                      <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-4">
+                        <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
+                          <thead>
+                            <tr className="text-neutral-500 border-b border-[#2A2A28]">
+                              <th className="py-2">#</th>
+                              <th className="py-2">PLAYER</th>
+                              <th className="py-2 text-right">GOALS</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#2A2A28]/50">
+                            {playerStats.top_scorers.slice(0, 10).map((player, index) => (
+                              <tr
+                                key={player.player_id}
+                                className="hover:bg-neutral-900/30 cursor-pointer"
+                                onClick={() => {
+                                  setSelectedPlayer(player.player_id);
+                                  handleNavigate('/players');
+                                }}
+                              >
+                                <td className="py-2.5 text-[#D9622B]">{index + 1}</td>
+                                <td className="py-2.5 font-semibold text-white">{player.name}</td>
+                                <td className="py-2.5 text-right font-bold">{player.goals}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Top Assists */}
+                  <div className="space-y-4">
+                    <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase">[ TOP_ASSISTS ]</h3>
+                    {dashboardLoading['player-stats'] ? (
+                      <LoadingState label="Loading player stats..." />
+                    ) : dashboardError['player-stats'] ? (
+                      <ErrorState message={dashboardError['player-stats']} onRetry={fetchPlayerStats} />
+                    ) : playerStats ? (
+                      <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-4">
+                        <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
+                          <thead>
+                            <tr className="text-neutral-500 border-b border-[#2A2A28]">
+                              <th className="py-2">#</th>
+                              <th className="py-2">PLAYER</th>
+                              <th className="py-2 text-right">ASSISTS</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#2A2A28]/50">
+                            {playerStats.top_assists.slice(0, 10).map((player, index) => (
+                              <tr
+                                key={player.player_id}
+                                className="hover:bg-neutral-900/30 cursor-pointer"
+                                onClick={() => {
+                                  setSelectedPlayer(player.player_id);
+                                  handleNavigate('/players');
+                                }}
+                              >
+                                <td className="py-2.5 text-[#D9622B]">{index + 1}</td>
+                                <td className="py-2.5 font-semibold text-white">{player.name}</td>
+                                <td className="py-2.5 text-right font-bold">{player.assists}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
+              )}
 
-                {/* ARG vs ENG */}
-                <div className="border border-[#2A2A28] bg-[#171715]/20 p-6 rounded flex flex-col sm:flex-row items-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-6">
-                    <span className="mono text-[0.75rem] text-[#D9622B] font-bold">[ M003 ]</span>
-                    <div>
-                      <div className="text-[0.95rem] font-semibold text-white">🇦🇷 ARGENTINA vs 🏴󠁧󠁢󠁥󠁮󠁧󠁿 ENGLAND</div>
-                      <div className="mono text-[0.6rem] text-neutral-500 mt-1">GROUP B · STADIUM: LUSAIL CUP</div>
+              {/* Team Stats Tab */}
+              {activeTab === 'team-stats' && (
+                <div className="space-y-6">
+                  <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase">[ TEAM_FORM ]</h3>
+                  {dashboardLoading[`standings-${selectedGroup}`] ? (
+                    <LoadingState label="Loading team stats..." />
+                  ) : dashboardError[`standings-${selectedGroup}`] ? (
+                    <ErrorState message={dashboardError[`standings-${selectedGroup}`]} onRetry={() => fetchStandings(selectedGroup)} />
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {standings.map((standing) => {
+                        const teamForm = teamForms[standing.team.id];
+                        return (
+                          <div key={standing.team.id} className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                              <span className="text-3xl">{standing.team.flag}</span>
+                              <div>
+                                <h4 className="font-syncopate text-[0.9rem] font-bold text-white">{standing.team.name}</h4>
+                                <div className="mono text-[0.65rem] text-neutral-500 mt-1">{teamForm?.form || '---'}</div>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-4 text-center mono text-[0.7rem]">
+                              <div>
+                                <div className="text-[#D9622B] font-bold text-lg">{teamForm?.goals_scored || 0}</div>
+                                <div className="text-neutral-500">GOALS FOR</div>
+                              </div>
+                              <div>
+                                <div className="text-white font-bold text-lg">{teamForm?.goals_conceded || 0}</div>
+                                <div className="text-neutral-500">GOALS AGAINST</div>
+                              </div>
+                              <div>
+                                <div className="text-[#8B8A85] font-bold text-lg">{teamForm?.clean_sheets || 0}</div>
+                                <div className="text-neutral-500">CLEAN SHEETS</div>
+                              </div>
+                            </div>
+                            {teamForm?.recent_matches && teamForm.recent_matches.length > 0 && (
+                              <div className="mt-4 pt-4 border-t border-[#2A2A28]/50">
+                                <div className="mono text-[0.6rem] text-neutral-500 mb-2">RECENT MATCHES</div>
+                                <div className="space-y-2">
+                                  {teamForm.recent_matches.map((match, idx) => (
+                                    <div key={idx} className="flex justify-between items-center text-[0.65rem] mono">
+                                      <span className="text-neutral-300">vs {match.opponent}</span>
+                                      <span className={`font-semibold ${
+                                        match.result === 'W' ? 'text-green-400' :
+                                        match.result === 'L' ? 'text-red-400' : 'text-yellow-400'
+                                      }`}>
+                                        {match.score}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="mono text-[0.9rem] font-bold text-[#D9622B] border border-[#D9622B]/20 bg-[#D9622B]/5 px-4 py-1.5 rounded">
-                      2 - 2
-                    </div>
-                    <div className="mono text-right text-[0.65rem] text-[#8B8A85]">
-                      <div>STATUS: FINISHED</div>
-                      <div>DATE: 2026-06-14</div>
-                    </div>
-                  </div>
+                  )}
                 </div>
-
-              </div>
+              )}
             </div>
           </div>
         )}

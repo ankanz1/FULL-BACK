@@ -36,6 +36,11 @@ __pycache__/
 # Local Service Data
 python-service/.venv/
 python-service/__pycache__/
+python-service/data/
 mcp-server/dist/
 mcp-server/node_modules/
+
+# Archives & Large Data
+archive/
+.commandcode/
 

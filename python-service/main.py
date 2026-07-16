@@ -36,7 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-CSV_PATH = "data/players_stats.csv"
+CSV_PATH = "data/player_clusters.csv"
 
 # Global cache for processed data
 processed_data: Dict[str, Any] = {}
@@ -45,97 +45,43 @@ def process_clustering():
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"Player stats dataset not found at {CSV_PATH}")
 
-    # Load data
+    # Load data (already processed by build_clusters.py!)
     df = pd.read_csv(CSV_PATH)
     
-    # Filter players with low minutes
-    df = df[df["minutes_played"] >= 90].copy()
-
-    # Calculate per 90 metrics
-    df["goals_per_90"] = (df["goals"] / df["minutes_played"]) * 90
-    df["assists_per_90"] = (df["assists"] / df["minutes_played"]) * 90
-    df["key_passes_per_90"] = (df["key_passes"] / df["minutes_played"]) * 90
-    df["tackles_per_90"] = (df["tackles"] / df["minutes_played"]) * 90
-    df["interceptions_per_90"] = (df["interceptions"] / df["minutes_played"]) * 90
-
-    features = [
-        "goals_per_90", 
-        "assists_per_90", 
-        "key_passes_per_90", 
-        "tackles_per_90", 
-        "interceptions_per_90", 
-        "pass_accuracy", 
-        "market_value_m"
-    ]
-
-    # Handle missing values
-    df[features] = df[features].fillna(0)
-
-    # Scale features
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(df[features])
-
-    # Run K-Means
-    k = 5
-    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-    clusters = kmeans.fit_predict(X_scaled)
-    df["cluster"] = clusters
-
-    # Calculate silhouette score
-    sil_score = float(silhouette_score(X_scaled, clusters))
-
-    # Run PCA for visualization (2D)
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X_scaled)
-    df["pca_x"] = X_pca[:, 0]
-    df["pca_y"] = X_pca[:, 1]
-
-    # Map clusters to football-logical archetypes using feature averages
-    cluster_means = df.groupby("cluster")[features].mean()
+    # Rename columns to keep compatibility with existing API endpoints!
+    df = df.rename(columns={
+        "total_goals": "goals",
+        "total_assists": "assists",
+        "total_minutes_played": "minutes_played"
+    })
+    # Add placeholder columns for compatibility with existing code that expects them
+    for col in ["key_passes", "tackles", "interceptions", "pass_accuracy"]:
+        df[col] = 0  # These weren't in our original dataset
     
-    # Striker (highest goals)
-    striker_c = int(cluster_means["goals_per_90"].idxmax())
+    # Get scaled features from the precomputed columns
+    scaled_cols = [c for c in df.columns if c.endswith("_scaled")]
+    X_scaled = df[scaled_cols].values
     
-    # Playmaker (highest key passes among non-strikers)
-    rem_1 = cluster_means.index.difference([striker_c])
-    playmaker_c = int(cluster_means.loc[rem_1, "key_passes_per_90"].idxmax())
+    # Calculate silhouette score from existing clusters
+    sil_score = float(silhouette_score(X_scaled, df["cluster"].values))
     
-    # Defensive Anchor (highest interceptions among remainder)
-    rem_2 = rem_1.difference([playmaker_c])
-    defensive_c = int(cluster_means.loc[rem_2, "interceptions_per_90"].idxmax())
-    
-    # Tempo Control / Midfielder (highest pass accuracy among remainder)
-    rem_3 = rem_2.difference([defensive_c])
-    tempo_c = int(cluster_means.loc[rem_3, "pass_accuracy"].idxmax())
-    
-    # Fullback / Box-to-Box (last remaining)
-    rem_4 = rem_3.difference([tempo_c])
-    b2b_c = int(rem_4[0]) if len(rem_4) > 0 else -1
+    # Create archetypes mapping
+    archetypes = {}
+    for c_id in df["cluster"].unique():
+        archetypes[int(c_id)] = df[df["cluster"] == c_id]["archetype"].iloc[0]
 
-    archetypes = {
-        striker_c: "Elite Goalscorer (Advanced Attacker)",
-        playmaker_c: "Creative Playmaker (Winger/Attacking Midfielder)",
-        defensive_c: "Defensive Anchor (Ball-Winning Defender)",
-        tempo_c: "Tempo Regulator (Ball-Playing Midfielder)",
-    }
-    if b2b_c != -1:
-        archetypes[b2b_c] = "Dynamic Fullback / Box-to-Box Midfielder"
-    else:
-        # Fallback if any duplicate
-        for idx in range(k):
-            if idx not in archetypes:
-                archetypes[idx] = "Generalist Contributor"
-
-    df["archetype"] = df["cluster"].map(archetypes)
+    # Add PCA placeholders for compatibility
+    df["pca_x"] = 0
+    df["pca_y"] = 0
 
     # Store in global cache
     processed_data["df"] = df
     processed_data["X_scaled"] = X_scaled
-    processed_data["features"] = features
+    processed_data["features"] = ["goals_per_90", "assists_per_90"]
     processed_data["silhouette_score"] = sil_score
     processed_data["archetypes"] = archetypes
     
-    print(f"Clustering model updated. Silhouette Score: {sil_score:.3f}")
+    print(f"Clustering model loaded. Silhouette Score: {sil_score:.3f}")
 
 # Perform clustering on startup
 try:
@@ -338,13 +284,30 @@ matches_db = {
     }
 }
 
+standings_db = {
+    "A": [
+        {"position": 1, "team": teams_db["GER"], "played": 1, "won": 1, "drawn": 0, "lost": 0, "goals_for": 3, "goals_against": 1, "points": 3},
+        {"position": 2, "team": teams_db["USA"], "played": 1, "won": 1, "drawn": 0, "lost": 0, "goals_for": 2, "goals_against": 1, "points": 3},
+        {"position": 3, "team": teams_db["COL"], "played": 1, "won": 0, "drawn": 0, "lost": 1, "goals_for": 1, "goals_against": 2, "points": 0},
+        {"position": 4, "team": teams_db["JPN"], "played": 1, "won": 0, "drawn": 0, "lost": 1, "goals_for": 1, "goals_against": 3, "points": 0}
+    ],
+    "B": [
+        {"position": 1, "team": teams_db["FRA"], "played": 1, "won": 1, "drawn": 0, "lost": 0, "goals_for": 2, "goals_against": 1, "points": 3},
+        {"position": 2, "team": teams_db["ARG"], "played": 1, "won": 0, "drawn": 1, "lost": 0, "goals_for": 2, "goals_against": 2, "points": 1},
+        {"position": 3, "team": teams_db["ENG"], "played": 1, "won": 0, "drawn": 1, "lost": 0, "goals_for": 2, "goals_against": 2, "points": 1},
+        {"position": 4, "team": teams_db["MAR"], "played": 0, "won": 0, "drawn": 0, "lost": 0, "goals_for": 0, "goals_against": 0, "points": 0}
+    ]
+}
+
 team_forms_db = {
-    "USA": "Form: WDWLW. Avg goals scored: 1.6/match, conceded: 0.8/match.",
-    "COL": "Form: LWWWD. Avg goals scored: 2.0/match, conceded: 0.6/match.",
-    "GER": "Form: WWWDW. Avg goals scored: 2.4/match, conceded: 1.0/match.",
-    "JPN": "Form: LWWLD. Avg goals scored: 1.2/match, conceded: 1.4/match.",
-    "ARG": "Form: WWDWD. Avg goals scored: 1.8/match, conceded: 0.8/match.",
-    "ENG": "Form: WWDWD. Avg goals scored: 2.0/match, conceded: 1.0/match.",
+    "USA": {"team_id": "USA", "team_name": "United States", "form": "WDWLW", "recent_matches": [{"match_id": "M001", "opponent": "Colombia", "score": "2-1", "result": "W", "date": "2026-06-12"}], "goals_scored": 8, "goals_conceded": 5, "clean_sheets": 1},
+    "COL": {"team_id": "COL", "team_name": "Colombia", "form": "LWWWD", "recent_matches": [{"match_id": "M001", "opponent": "United States", "score": "1-2", "result": "L", "date": "2026-06-12"}], "goals_scored": 10, "goals_conceded": 3, "clean_sheets": 2},
+    "GER": {"team_id": "GER", "team_name": "Germany", "form": "WWWDW", "recent_matches": [{"match_id": "M002", "opponent": "Japan", "score": "3-1", "result": "W", "date": "2026-06-13"}], "goals_scored": 12, "goals_conceded": 5, "clean_sheets": 2},
+    "JPN": {"team_id": "JPN", "team_name": "Japan", "form": "LWWLD", "recent_matches": [{"match_id": "M002", "opponent": "Germany", "score": "1-3", "result": "L", "date": "2026-06-13"}], "goals_scored": 6, "goals_conceded": 7, "clean_sheets": 0},
+    "ARG": {"team_id": "ARG", "team_name": "Argentina", "form": "WWDWD", "recent_matches": [{"match_id": "M003", "opponent": "England", "score": "2-2", "result": "D", "date": "2026-06-14"}], "goals_scored": 9, "goals_conceded": 4, "clean_sheets": 1},
+    "ENG": {"team_id": "ENG", "team_name": "England", "form": "WWDWD", "recent_matches": [{"match_id": "M003", "opponent": "Argentina", "score": "2-2", "result": "D", "date": "2026-06-14"}], "goals_scored": 10, "goals_conceded": 5, "clean_sheets": 0},
+    "FRA": {"team_id": "FRA", "team_name": "France", "form": "WWWDW", "recent_matches": [], "goals_scored": 11, "goals_conceded": 4, "clean_sheets": 2},
+    "MAR": {"team_id": "MAR", "team_name": "Morocco", "form": "WDLWW", "recent_matches": [], "goals_scored": 7, "goals_conceded": 6, "clean_sheets": 1},
 }
 
 # API Sports Team ID Map
@@ -800,6 +763,68 @@ async def generate_highlights(video_id: str):
     return {
         "video_id": video_id,
         "highlights": highlights
+    }
+
+# Free endpoints for dashboard
+@app.get("/standings/{group}")
+async def get_standings(group: str):
+    """Get group standings"""
+    group = group.upper()
+    if group not in standings_db:
+        raise HTTPException(status_code=404, detail=f"Group {group} not found. Available groups: {list(standings_db.keys())}")
+    return standings_db[group]
+
+@app.get("/matches")
+async def get_all_matches():
+    """Get all matches (fixtures)"""
+    return list(matches_db.values())
+
+@app.get("/matches/{match_id}")
+async def get_match(match_id: str):
+    """Get single match stats"""
+    match = fetch_real_match_stats(match_id)
+    if not match:
+        raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
+    return match
+
+@app.get("/team-form/{team_id}")
+async def get_team_form(team_id: str):
+    """Get team form and recent matches"""
+    team_id = team_id.upper()
+    if team_id in team_forms_db:
+        return team_forms_db[team_id]
+    
+    # Try to fetch real team form
+    real_form = fetch_real_team_form(team_id)
+    if real_form != "Form: WDLWW. Fallback metrics loaded.":
+        return {
+            "team_id": team_id,
+            "team_name": team_id,
+            "form": real_form.split("Form: ")[1].split(".")[0] if "Form: " in real_form else "WDLWW",
+            "recent_matches": [],
+            "goals_scored": 0,
+            "goals_conceded": 0,
+            "clean_sheets": 0
+        }
+    
+    raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+
+@app.get("/player-stats")
+async def get_player_stats():
+    """Get top scorers and assist leaders"""
+    if "df" not in processed_data:
+        try:
+            process_clustering()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Data not initialized: {e}")
+    
+    df = processed_data["df"]
+    top_scorers = df.sort_values("goals", ascending=False).head(10).to_dict(orient="records")
+    top_assists = df.sort_values("assists", ascending=False).head(10).to_dict(orient="records")
+    
+    return {
+        "top_scorers": top_scorers,
+        "top_assists": top_assists
     }
 
 if __name__ == "__main__":
