@@ -87,7 +87,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "predict_outcome",
-        description: "Generate AI premium match outcome prediction (requires payment).",
+        description: "Generate AI match outcome prediction.",
         inputSchema: {
           type: "object",
           properties: {
@@ -101,7 +101,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "tactical_breakdown",
-        description: "Generate premium tactical match breakdown writeup (requires payment).",
+        description: "Generate tactical match breakdown writeup.",
         inputSchema: {
           type: "object",
           properties: {
@@ -115,7 +115,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "player_style_cluster",
-        description: "Access premium player similarity clustering data (requires payment).",
+        description: "Access player similarity clustering data.",
         inputSchema: {
           type: "object",
           properties: {
@@ -129,7 +129,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "generate_highlights",
-        description: "Generate premium match highlight clips from audio telemetry (requires payment).",
+        description: "Generate match highlight clips from audio telemetry.",
         inputSchema: {
           type: "object",
           properties: {
@@ -150,42 +150,7 @@ const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || "http://localhost:8
 async function callPythonService(path: string): Promise<any> {
   const url = `${PYTHON_SERVICE_URL}${path}`;
   
-  // First attempt (no payment signature)
-  let response = await fetch(url);
-  
-  if (response.status === 402) {
-    // Read PAYMENT-REQUIRED header
-    const paymentRequiredHeader = response.headers.get("payment-required");
-    if (!paymentRequiredHeader) {
-      throw new Error("402 Payment Required returned without PAYMENT-REQUIRED header");
-    }
-    
-    // Decode payment requirements
-    const requirements = JSON.parse(Buffer.from(paymentRequiredHeader, "base64").toString("utf-8"));
-    const accepts = requirements.accepts?.[0];
-    if (!accepts) {
-      throw new Error("Invalid payment requirements header structure");
-    }
-    
-    // Construct signed payment payload (Base64 encoded JSON)
-    const amount = accepts.maxAmountRequired;
-    const paymentPayload = {
-      x402Version: 1,
-      amount: amount,
-      network: accepts.network,
-      asset: accepts.asset,
-      signature: "0xmockedsignaturesincewearetestinglocally"
-    };
-    
-    const paymentSignature = Buffer.from(JSON.stringify(paymentPayload)).toString("base64");
-    
-    // Retry with payment-signature header
-    response = await fetch(url, {
-      headers: {
-        "payment-signature": paymentSignature
-      }
-    });
-  }
+  const response = await fetch(url);
   
   if (!response.ok) {
     const errText = await response.text();

@@ -3,9 +3,8 @@ import { gsap } from 'gsap';
 import logoMark from './assets/logo_mark.png';
 import LoadingState from './components/LoadingState';
 import ErrorState from './components/ErrorState';
-import PaymentBadge from './components/PaymentBadge';
-import LockedPreview from './components/LockedPreview';
-import PaywallModal, { type PaywallRequest } from './components/PaywallModal';
+
+const API_BASE = import.meta.env.VITE_PYTHON_SERVICE_URL || 'http://localhost:8000';
 
 interface Player {
   player_id: string;
@@ -50,6 +49,10 @@ interface MatchStats {
   score: { home: number; away: number };
   stats?: any;
   events?: any[];
+  date?: string;
+  stage?: string;
+  group?: string;
+  matchday?: number;
 }
 
 interface GroupStanding {
@@ -88,13 +91,11 @@ interface PlayerStats {
 
 
 export default function App() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [progress, setProgress] = useState(0);
-
   // Custom router state
   const [currentPath, setCurrentPath] = useState('/'); // '/' | '/dashboard' | '/analyst' | '/players' | '/highlights' | '/developers'
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [, setLoading] = useState(false);
+  const [, setProgress] = useState(0);
 
   // Layout refs for GSAP animations
   const pageContainerRef = useRef<HTMLDivElement>(null);
@@ -105,7 +106,8 @@ export default function App() {
 
   // Data states
   const [players, setPlayers] = useState<Player[]>([]);
-  const [selectedPlayer, setSelectedPlayer] = useState<string>('PL001'); // Christian Pulisic
+  const [clusterStats, setClusterStats] = useState<{ silhouette_score: number; k: number; clusters: Array<{ cluster_id: number; archetype: string }> } | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<string>('');
   const [playerClusterData, setPlayerClusterData] = useState<any>(null);
 
   // Match & prediction states
@@ -113,6 +115,9 @@ export default function App() {
   const [predictionData, setPredictionData] = useState<any>(null);
   const [breakdownData, setBreakdownData] = useState<any>(null);
   const [highlightsData, setHighlightsData] = useState<Highlight[]>([]);
+  const [matchDetail, setMatchDetail] = useState<MatchStats | null>(null);
+  const [matchDetailLoading, setMatchDetailLoading] = useState(false);
+  const [matchDetailError, setMatchDetailError] = useState('');
 
   // New dashboard states
   const [activeTab, setActiveTab] = useState<string>('overview'); // 'overview' | 'table' | 'fixtures' | 'player-stats' | 'team-stats'
@@ -124,15 +129,11 @@ export default function App() {
   const [dashboardLoading, setDashboardLoading] = useState<Record<string, boolean>>({});
   const [dashboardError, setDashboardError] = useState<Record<string, string>>({});
 
-  // Paywall states
-  const [paywallRequired, setPaywallRequired] = useState<PaywallRequest | null>(null);
+  const [toolLoading, setToolLoading] = useState<Record<string, boolean>>({});
+  const [toolError, setToolError] = useState<Record<string, string>>({});
 
-  const [paymentStatus, setPaymentStatus] = useState<string>(''); // 'signing' | 'settled' | ''
-  const [paymentTx, setPaymentTx] = useState<string>('');
-  const [unlockedResources, setUnlockedResources] = useState<Record<string, boolean>>({});
-  const [receipts, setReceipts] = useState<Record<string, { amount: string; tx: string }>>({});
-  const [premiumLoading, setPremiumLoading] = useState<Record<string, boolean>>({});
-  const [premiumError, setPremiumError] = useState<Record<string, string>>({});
+  // Tooltip state for scatter plot
+  const [scatterTooltip, setScatterTooltip] = useState<{ player: Player; x: number; y: number } | null>(null);
 
   // Chat states
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'assistant' | 'system'; text: string }>>([
@@ -144,34 +145,28 @@ export default function App() {
   // Asset preloading
   useEffect(() => {
     let loadedCount = 0;
-    let hasFailed = false;
+    let totalImages = IMAGE_ASSETS.length;
 
     const preloadImage = (url: string) => {
       const img = new Image();
-      img.src = url;
-      img.onload = () => {
-        if (hasFailed) return;
+      const onDone = () => {
         loadedCount++;
-        setProgress(Math.round((loadedCount / IMAGE_ASSETS.length) * 100));
-        if (loadedCount === IMAGE_ASSETS.length) {
-          setTimeout(() => {
-            setLoading(false);
-            // Trigger initial entrance animations
-            triggerEntranceAnims();
-          }, 600);
-        }
-      };
-      img.onerror = () => {
-        if (!hasFailed) {
-          hasFailed = true;
-          setError(true);
+        setProgress(Math.round((loadedCount / totalImages) * 100));
+        if (loadedCount >= totalImages) {
           setLoading(false);
+          setTimeout(triggerEntranceAnims, 100);
         }
       };
+      img.onload = onDone;
+      img.onerror = onDone;
+      img.src = url;
     };
 
     IMAGE_ASSETS.forEach(preloadImage);
     fetchPlayers();
+    fetchClusterStats();
+
+    setTimeout(() => setLoading(false), 6000);
   }, []);
 
   // Detect prefers-reduced-motion
@@ -284,15 +279,37 @@ export default function App() {
   // Fetch players list
   const fetchPlayers = async () => {
     try {
-      const res = await fetch('http://localhost:8000/players');
+      const res = await fetch(`${API_BASE}/players`);
       if (res.ok) {
         const data = await res.json();
         setPlayers(data);
+        if (data.length > 0) setSelectedPlayer(data[0].player_id);
       }
     } catch (e) {
       console.error('Error fetching players:', e);
     }
   };
+
+  const fetchClusterStats = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/cluster/stats`);
+      if (res.ok) {
+        const data = await res.json();
+        setClusterStats({
+          silhouette_score: data.silhouette_score,
+          k: data.clusters?.length || 5,
+          clusters: (data.clusters || []).map((c: any) => ({
+            cluster_id: c.cluster_id,
+            archetype: c.archetype,
+          })),
+        });
+      }
+    } catch (e) {
+      console.error('Error fetching cluster stats:', e);
+    }
+  };
+
+  const CLUSTER_COLORS = ['#D9622B', '#6ba642', '#3b82f6', '#a855f7', '#eab308', '#ec4899', '#06b6d4', '#f97316'];
 
   // Fetch all matches (fixtures)
   const fetchMatches = async () => {
@@ -300,7 +317,7 @@ export default function App() {
     setDashboardLoading(prev => ({ ...prev, [key]: true }));
     setDashboardError(prev => ({ ...prev, [key]: '' }));
     try {
-      const res = await fetch('http://localhost:8000/matches');
+      const res = await fetch(`${API_BASE}/matches`);
       if (!res.ok) throw new Error('Failed to fetch matches');
       const data = await res.json();
       setMatches(data);
@@ -311,13 +328,35 @@ export default function App() {
     }
   };
 
+  // Fetch single match detail
+  const fetchMatchDetail = async (matchId: string) => {
+    setMatchDetailLoading(true);
+    setMatchDetailError('');
+    setMatchDetail(null);
+    try {
+      const res = await fetch(`${API_BASE}/matches/${matchId}`);
+      if (!res.ok) throw new Error(`Failed to fetch match ${matchId}`);
+      const data = await res.json();
+      setMatchDetail(data);
+    } catch (e) {
+      setMatchDetailError((e as Error).message);
+    } finally {
+      setMatchDetailLoading(false);
+    }
+  };
+
+  const handleMatchClick = (matchId: string) => {
+    setSelectedMatchId(matchId);
+    fetchMatchDetail(matchId);
+  };
+
   // Fetch standings for a group
   const fetchStandings = async (group: string) => {
     const key = `standings-${group}`;
     setDashboardLoading(prev => ({ ...prev, [key]: true }));
     setDashboardError(prev => ({ ...prev, [key]: '' }));
     try {
-      const res = await fetch(`http://localhost:8000/standings/${group}`);
+      const res = await fetch(`${API_BASE}/standings/${group}`);
       if (!res.ok) throw new Error(`Failed to fetch standings for group ${group}`);
       const data = await res.json();
       setStandings(data);
@@ -334,7 +373,7 @@ export default function App() {
     setDashboardLoading(prev => ({ ...prev, [key]: true }));
     setDashboardError(prev => ({ ...prev, [key]: '' }));
     try {
-      const res = await fetch('http://localhost:8000/player-stats');
+      const res = await fetch(`${API_BASE}/player-stats`);
       if (!res.ok) throw new Error('Failed to fetch player stats');
       const data = await res.json();
       setPlayerStats(data);
@@ -351,7 +390,7 @@ export default function App() {
     setDashboardLoading(prev => ({ ...prev, [key]: true }));
     setDashboardError(prev => ({ ...prev, [key]: '' }));
     try {
-      const res = await fetch(`http://localhost:8000/team-form/${teamId}`);
+      const res = await fetch(`${API_BASE}/team-form/${teamId}`);
       if (!res.ok) throw new Error(`Failed to fetch form for team ${teamId}`);
       const data = await res.json();
       setTeamForms(prev => ({ ...prev, [teamId]: data }));
@@ -362,182 +401,96 @@ export default function App() {
     }
   };
 
-  // Custom fetch function that handles 402 Payment Required
-  const authenticatedFetch = async (url: string, path: string): Promise<any> => {
-    const savedSig = unlockedResources[path] ? receipts[path]?.tx : null;
-    const headers: Record<string, string> = {};
-    if (savedSig) {
-      const payload = {
-        x402Version: 1,
-        amount: path.includes('cluster') ? '10000' : path.includes('predict') ? '50000' : path.includes('tactical') ? '100000' : '80000',
-        network: 'eip155:84532',
-        asset: '0x036eFd41E265914E01E7574432c40e16414777a8',
-        signature: savedSig
-      };
-      headers['payment-signature'] = btoa(JSON.stringify(payload));
-    }
-
-    const res = await fetch(url, { headers });
-
-    if (res.status === 402) {
-      const paymentRequiredHeader = res.headers.get('payment-required');
-      if (!paymentRequiredHeader) {
-        throw new Error('402 returned without requirements header');
-      }
-
-      const requirements = JSON.parse(atob(paymentRequiredHeader));
-      const accepts = requirements.accepts?.[0];
-      if (!accepts) {
-        throw new Error('Invalid payment requirements structure');
-      }
-
-      return new Promise((resolve, reject) => {
-        setPaywallRequired({
-          resource: path,
-          amount: accepts.maxAmountRequired,
-          description: accepts.description,
-          resolve: async (signature: string) => {
-            try {
-              const retryPayload = {
-                x402Version: 1,
-                amount: accepts.maxAmountRequired,
-                network: accepts.network,
-                asset: accepts.asset,
-                signature: signature
-              };
-              const retryHeaders = {
-                'payment-signature': btoa(JSON.stringify(retryPayload))
-              };
-              const retryRes = await fetch(url, { headers: retryHeaders });
-              if (!retryRes.ok) {
-                const text = await retryRes.text();
-                reject(new Error(`Failed on retry: ${text}`));
-              } else {
-                const data = await retryRes.json();
-                setUnlockedResources(prev => ({ ...prev, [path]: true }));
-                setReceipts(prev => ({ ...prev, [path]: { amount: accepts.maxAmountRequired, tx: signature } }));
-                resolve(data);
-              }
-            } catch (err) {
-              reject(err);
-            }
-          },
-          reject: (err) => reject(err)
-        });
-      });
-    }
-
+  const authenticatedFetch = async (url: string): Promise<any> => {
+    const res = await fetch(url);
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Service returned error ${res.status}: ${text}`);
     }
-
     return await res.json();
-  };
-
-  const handlePaywallSettle = () => {
-    if (!paywallRequired) return;
-    setPaymentStatus('signing');
-
-    // Simulate smart contract interactions (EIP-3009 permit/transfer signature)
-    setTimeout(() => {
-      const mockTx = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-      setPaymentTx(mockTx);
-      setPaymentStatus('settled');
-
-      setTimeout(() => {
-        const resolveFn = paywallRequired.resolve;
-        setPaywallRequired(null);
-        setPaymentStatus('');
-        setPaymentTx('');
-        resolveFn(mockTx);
-      }, 1000);
-    }, 1500);
-  };
-
-  const withPremiumFetch = async <T,>(
-    path: string,
-    runner: () => Promise<T>,
-    onSuccess: (data: T) => void,
-    onClear: () => void,
-  ) => {
-    onClear();
-    setPremiumLoading((prev) => ({ ...prev, [path]: true }));
-    setPremiumError((prev) => ({ ...prev, [path]: '' }));
-    try {
-      const data = await runner();
-      onSuccess(data);
-    } catch (e: any) {
-      console.error(e);
-      setPremiumError((prev) => ({ ...prev, [path]: e?.message || 'Request failed' }));
-    } finally {
-      setPremiumLoading((prev) => ({ ...prev, [path]: false }));
-    }
   };
 
   // Fetch clustering results
   const fetchClustering = async (playerId: string) => {
     const path = `/cluster/player/${playerId}`;
-    await withPremiumFetch(
-      path,
-      () => authenticatedFetch(`http://localhost:8000${path}`, path),
-      (data) => setPlayerClusterData(data),
-      () => setPlayerClusterData(null),
-    );
+    setToolLoading(prev => ({ ...prev, [path]: true }));
+    setToolError(prev => ({ ...prev, [path]: '' }));
+    setPlayerClusterData(null);
+    try {
+      const res = await fetch(`${API_BASE}${path}`);
+      if (!res.ok) throw new Error(`Failed to fetch clustering data: ${res.statusText}`);
+      const data = await res.json();
+      setPlayerClusterData(data);
+    } catch (e: any) {
+      setToolError(prev => ({ ...prev, [path]: e?.message || 'Request failed' }));
+    } finally {
+      setToolLoading(prev => ({ ...prev, [path]: false }));
+    }
   };
 
   // Fetch prediction results
   const fetchPrediction = async (matchId: string) => {
     const path = `/predict/match/${matchId}`;
-    await withPremiumFetch(
-      path,
-      () => authenticatedFetch(`http://localhost:8000${path}`, path),
-      (data) => setPredictionData(data),
-      () => setPredictionData(null),
-    );
+    setToolLoading(prev => ({ ...prev, [path]: true }));
+    setToolError(prev => ({ ...prev, [path]: '' }));
+    setPredictionData(null);
+    try {
+      const res = await fetch(`${API_BASE}${path}`);
+      if (!res.ok) throw new Error(`Failed to fetch prediction data: ${res.statusText}`);
+      const data = await res.json();
+      setPredictionData(data);
+    } catch (e: any) {
+      setToolError(prev => ({ ...prev, [path]: e?.message || 'Request failed' }));
+    } finally {
+      setToolLoading(prev => ({ ...prev, [path]: false }));
+    }
   };
 
   // Fetch tactical breakdown results
   const fetchTacticalBreakdown = async (matchId: string) => {
     const path = `/tactical/match/${matchId}`;
-    await withPremiumFetch(
-      path,
-      () => authenticatedFetch(`http://localhost:8000${path}`, path),
-      (data) => setBreakdownData(data),
-      () => setBreakdownData(null),
-    );
+    setToolLoading(prev => ({ ...prev, [path]: true }));
+    setToolError(prev => ({ ...prev, [path]: '' }));
+    setBreakdownData(null);
+    try {
+      const res = await fetch(`${API_BASE}${path}`);
+      if (!res.ok) throw new Error(`Failed to fetch tactical breakdown: ${res.statusText}`);
+      const data = await res.json();
+      setBreakdownData(data);
+    } catch (e: any) {
+      setToolError(prev => ({ ...prev, [path]: e?.message || 'Request failed' }));
+    } finally {
+      setToolLoading(prev => ({ ...prev, [path]: false }));
+    }
   };
 
   // Fetch match highlights
   const fetchHighlights = async (matchId: string) => {
     const path = `/highlights/match/${matchId}`;
-    await withPremiumFetch(
-      path,
-      () => authenticatedFetch(`http://localhost:8000${path}`, path),
-      (data) => setHighlightsData(data.highlights || []),
-      () => setHighlightsData([]),
-    );
+    setToolLoading(prev => ({ ...prev, [path]: true }));
+    setToolError(prev => ({ ...prev, [path]: '' }));
+    setHighlightsData([]);
+    try {
+      const res = await fetch(`${API_BASE}${path}`);
+      if (!res.ok) throw new Error(`Failed to fetch highlights: ${res.statusText}`);
+      const data = await res.json();
+      setHighlightsData(data.highlights || []);
+    } catch (e: any) {
+      setToolError(prev => ({ ...prev, [path]: e?.message || 'Request failed' }));
+    } finally {
+      setToolLoading(prev => ({ ...prev, [path]: false }));
+    }
   };
 
-  const isUnlocked = (path: string) => Boolean(unlockedResources[path] || receipts[path]);
-
-  // Re-load already-unlocked premium datasets when path/target changes
+  // Re-load data when route/selection changes
   useEffect(() => {
     if (currentPath === '/players' && selectedPlayer) {
-      const path = `/cluster/player/${selectedPlayer}`;
-      if (isUnlocked(path)) fetchClustering(selectedPlayer);
-      else setPlayerClusterData(null);
+      fetchClustering(selectedPlayer);
     } else if (currentPath === '/analyst' && selectedMatchId) {
-      const predictPath = `/predict/match/${selectedMatchId}`;
-      const tacticalPath = `/tactical/match/${selectedMatchId}`;
-      if (isUnlocked(predictPath)) fetchPrediction(selectedMatchId);
-      else setPredictionData(null);
-      if (isUnlocked(tacticalPath)) fetchTacticalBreakdown(selectedMatchId);
-      else setBreakdownData(null);
+      fetchPrediction(selectedMatchId);
+      fetchTacticalBreakdown(selectedMatchId);
     } else if (currentPath === '/highlights' && selectedMatchId) {
-      const path = `/highlights/match/${selectedMatchId}`;
-      if (isUnlocked(path)) fetchHighlights(selectedMatchId);
-      else setHighlightsData([]);
+      fetchHighlights(selectedMatchId);
     }
   }, [currentPath, selectedPlayer, selectedMatchId]);
 
@@ -587,47 +540,32 @@ export default function App() {
     try {
       const cleanText = userText.toLowerCase();
       let reply = '';
-      let isPremiumTool = false;
       let path = '';
-      let amount = '0';
-      let desc = '';
       let toolName = '';
 
       if (cleanText.includes('cluster') || cleanText.includes('type of player') || cleanText.includes('similar to')) {
-        isPremiumTool = true;
         toolName = 'player_style_cluster';
         const targetPlayer = players.find(p => cleanText.includes(p.name.toLowerCase())) || players[0];
         path = `/cluster/player/${targetPlayer.player_id}`;
-        amount = '10000';
-        desc = `Access premium similarity clustering for ${targetPlayer.name}`;
       } else if (cleanText.includes('predict') || cleanText.includes('prediction') || cleanText.includes('who will win')) {
-        isPremiumTool = true;
         toolName = 'predict_outcome';
         path = `/predict/match/${selectedMatchId}`;
-        amount = '50000';
-        desc = `Generate premium AI prediction for match ${selectedMatchId}`;
       } else if (cleanText.includes('breakdown') || cleanText.includes('tactical') || cleanText.includes('tactics')) {
-        isPremiumTool = true;
         toolName = 'tactical_breakdown';
         path = `/tactical/match/${selectedMatchId}`;
-        amount = '100000';
-        desc = `Generate premium post-match tactical breakdown for ${selectedMatchId}`;
       } else if (cleanText.includes('highlight') || cleanText.includes('video') || cleanText.includes('clip')) {
-        isPremiumTool = true;
         toolName = 'generate_highlights';
         path = `/highlights/match/${selectedMatchId}`;
-        amount = '80000';
-        desc = `Generate premium highlights for match ${selectedMatchId}`;
       }
 
-      if (isPremiumTool) {
+      if (toolName) {
         setMessages(prev => [...prev, {
           sender: 'system',
-          text: `INVOKING_MCP_TOOL: fullback-mcp-server :: ${toolName}()\nSTATUS: 402 PAYMENT REQUIRED (${parseFloat(amount) / 1000000} USDC required) :: ${desc}`
+          text: `INVOKING_TOOL: ${toolName}()`
         }]);
 
         try {
-          const result = await authenticatedFetch(`http://localhost:8000${path}`, path);
+          const result = await authenticatedFetch(`${API_BASE}${path}`);
           reply = `MCP_TOOL_EXECUTION :: SUCCESS\n\n`;
           if (toolName === 'player_style_cluster') {
             reply += `Player Similarity Report for **${result.player.name}**:\n`;
@@ -642,7 +580,7 @@ export default function App() {
           } else if (toolName === 'tactical_breakdown') {
             reply += `Tactical Breakdown:\n${result.tactical_breakdown}`;
           } else if (toolName === 'generate_highlights') {
-            reply += `Highlights generation successful. Found ${result.highlights.length} events inside the audio telemetry. Visual clips unlocked.`;
+            reply += `Highlights generation successful. Found ${result.highlights.length} events inside the audio telemetry.`;
           }
 
           setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
@@ -653,11 +591,11 @@ export default function App() {
         if (cleanText.includes('hello') || cleanText.includes('hi')) {
           reply = "HELLO. STANDING BY FOR World Cup telemetry analysis. Ask about player clustering, outcome predictions, or post-match breakdowns.";
         } else if (cleanText.includes('match') || cleanText.includes('fixture') || cleanText.includes('score')) {
-          reply = "Match M001: USA 2 - 1 Colombia (Finished)\nMatch M002: Germany 3 - 1 Japan (Finished)\nMatch M003: Argentina 2 - 2 England (Finished)\n\nAsk 'predict match' or 'tactical breakdown' to invoke premium AI tools.";
+          reply = "Match M001: USA 2 - 1 Colombia (Finished)\nMatch M002: Germany 3 - 1 Japan (Finished)\nMatch M003: Argentina 2 - 2 England (Finished)\n\nAsk 'predict match' or 'tactical breakdown' to invoke AI tools.";
         } else if (cleanText.includes('standing') || cleanText.includes('group')) {
           reply = "Group A:\n1. Germany - 3 pts\n2. United States - 3 pts\n3. Colombia - 0 pts\n4. Japan - 0 pts\n\nGroup B:\n1. France - 3 pts\n2. Argentina - 1 pts\n3. England - 1 pts\n4. Morocco - 0 pts";
         } else {
-          reply = "UNDERSTOOD. However, that query lies outside the free tier. Try asking for 'player similarity to Erling Haaland', 'predict match', or 'match standings'.";
+          reply = "UNDERSTOOD. Try asking for 'player similarity to Erling Haaland', 'predict match', or 'match standings'.";
         }
         setTimeout(() => {
           setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
@@ -669,47 +607,6 @@ export default function App() {
       setChatLoading(false);
     }
   };
-
-  // Loading Screen State
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen w-screen bg-[#0E0E0E] text-[#ECEAE3] font-syncopate select-none">
-        <div className="text-center space-y-6 max-w-xs md:max-w-sm px-6 flex flex-col items-center">
-          <img src={logoMark} alt="FULL BACK Logo Mark" className="w-16 h-16 md:w-20 md:h-20 animate-pulse object-contain mb-2" />
-          <div className="h-[2px] w-full bg-neutral-900 overflow-hidden relative">
-            <div
-              className="h-full bg-[#D9622B] transition-all duration-300 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <div className="flex justify-between items-center mono text-[0.65rem] opacity-50 tracking-wider w-full">
-            <span>PRELOADING_ASSETS</span>
-            <span>{progress}%</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Connection Error State
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen w-screen bg-[#0E0E0E] text-[#ECEAE3] font-syncopate select-none px-6 text-center">
-        <div className="max-w-md p-8 border border-red-500/20 bg-black/40 backdrop-blur-md rounded">
-          <div className="text-red-500 text-[1.2rem] md:text-[1.5rem] tracking-wider mb-4">▲ CONNECTION ERROR</div>
-          <p className="mono text-[0.75rem] opacity-75 mb-6 leading-relaxed">
-            FAILED TO INGEST FIELD VISUALIZATIONS. PLEASE CHECK YOUR INTERNET OR REF_RESOURCES PATHS.
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mono border border-[#ECEAE3] text-[#ECEAE3] px-4 py-2 hover:bg-[#D9622B] hover:border-[#D9622B] hover:text-white transition duration-300 tracking-wider text-[0.7rem]"
-          >
-            RETRY_CONNECTION
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div ref={pageContainerRef} className="min-h-screen bg-[#0E0E0E] text-[#ECEAE3] relative font-jetbrains selection:bg-[#D9622B]/30 flex flex-col">
@@ -910,11 +807,11 @@ export default function App() {
                       <ErrorState message={dashboardError['matches']} onRetry={fetchMatches} />
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {matches.map((match) => (
+                        {[...matches].sort((a, b) => (b.date||'').localeCompare(a.date||'')).map((match) => (
                           <div
                             key={match.match_id}
                             className="border border-[#2A2A28] bg-[#171715]/40 rounded p-4 hover:bg-[#171715]/60 transition-colors cursor-pointer"
-                            onClick={() => setSelectedMatchId(match.match_id)}
+                            onClick={() => handleMatchClick(match.match_id)}
                           >
                             <div className="flex justify-between items-center mb-2">
                               <span className="mono text-[0.6rem] text-neutral-500">[ {match.match_id} ]</span>
@@ -1004,69 +901,143 @@ export default function App() {
               {/* Table Tab */}
               {activeTab === 'table' && (
                 <div className="space-y-6">
-                  {/* Group Selector */}
-                  <div className="flex gap-2">
-                    {['A', 'B'].map((group) => (
+                  {/* Stage Selector — groups + knockout rounds */}
+                  <div className="flex flex-wrap gap-2">
+                    {'ABCDEFGHIJKL'.split('').map((g) => (
                       <button
-                        key={group}
-                        onClick={() => setSelectedGroup(group)}
-                        className={`mono text-[0.7rem] px-4 py-2 rounded border transition-colors ${
-                          selectedGroup === group
+                        key={g}
+                        onClick={() => setSelectedGroup(g)}
+                        className={`mono text-[0.7rem] px-3 py-1.5 rounded border transition-colors ${
+                          selectedGroup === g
                             ? 'border-[#D9622B] bg-[#D9622B]/10 text-[#D9622B]'
                             : 'border-[#2A2A28] text-[#8B8A85] hover:border-[#ECEAE3] hover:text-[#ECEAE3]'
                         }`}
                       >
-                        GROUP {group}
+                        GROUP {g}
+                      </button>
+                    ))}
+                    {[{ id: 'QF', label: 'QF' }, { id: 'SF', label: 'SF' }, { id: 'F', label: 'FINAL' }].map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedGroup(item.id)}
+                        className={`mono text-[0.7rem] px-3 py-1.5 rounded border transition-colors ${
+                          selectedGroup === item.id
+                            ? 'border-[#D9622B] bg-[#D9622B]/10 text-[#D9622B]'
+                            : 'border-[#2A2A28] text-[#8B8A85] hover:border-[#ECEAE3] hover:text-[#ECEAE3]'
+                        }`}
+                      >
+                        {item.label}
                       </button>
                     ))}
                   </div>
 
-                  {/* Standings Table */}
-                  {dashboardLoading[`standings-${selectedGroup}`] ? (
-                    <LoadingState label="Loading standings..." />
-                  ) : dashboardError[`standings-${selectedGroup}`] ? (
-                    <ErrorState message={dashboardError[`standings-${selectedGroup}`]} onRetry={() => fetchStandings(selectedGroup)} />
-                  ) : (
-                    <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
-                      <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
-                        <thead>
-                          <tr className="text-neutral-500 border-b border-[#2A2A28]">
-                            <th className="py-2">POS</th>
-                            <th className="py-2">TEAM</th>
-                            <th className="py-2 text-center">P</th>
-                            <th className="py-2 text-center">W</th>
-                            <th className="py-2 text-center">D</th>
-                            <th className="py-2 text-center">L</th>
-                            <th className="py-2 text-center">GF</th>
-                            <th className="py-2 text-center">GA</th>
-                            <th className="py-2 text-center">GD</th>
-                            <th className="py-2 text-right">PTS</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#2A2A28]/50">
-                          {standings.map((standing) => (
-                            <tr key={standing.team.id} className="hover:bg-neutral-900/30">
-                              <td className="py-2.5 text-[#D9622B]">{standing.position}</td>
-                              <td className="py-2.5 font-semibold text-white">
-                                {standing.team.flag} {standing.team.name}
-                              </td>
-                              <td className="py-2.5 text-center">{standing.played}</td>
-                              <td className="py-2.5 text-center">{standing.won}</td>
-                              <td className="py-2.5 text-center">{standing.drawn}</td>
-                              <td className="py-2.5 text-center">{standing.lost}</td>
-                              <td className="py-2.5 text-center">{standing.goals_for}</td>
-                              <td className="py-2.5 text-center">{standing.goals_against}</td>
-                              <td className="py-2.5 text-center">
-                                {standing.goals_for - standing.goals_against > 0 ? '+' : ''}
-                                {standing.goals_for - standing.goals_against}
-                              </td>
-                              <td className="py-2.5 text-right font-bold">{standing.points}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  {/* Table content: standings for groups, match list for knockout */}
+                  {(() => {
+                    const isGroup = selectedGroup.length === 1;
+
+                    if (isGroup) {
+                      return (
+                        <>
+                          {dashboardLoading[`standings-${selectedGroup}`] ? (
+                            <LoadingState label="Loading standings..." />
+                          ) : dashboardError[`standings-${selectedGroup}`] ? (
+                            <ErrorState message={dashboardError[`standings-${selectedGroup}`]} onRetry={() => fetchStandings(selectedGroup)} />
+                          ) : (
+                            <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+                              <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
+                                <thead>
+                                  <tr className="text-neutral-500 border-b border-[#2A2A28]">
+                                    <th className="py-2">POS</th>
+                                    <th className="py-2">TEAM</th>
+                                    <th className="py-2 text-center">P</th>
+                                    <th className="py-2 text-center">W</th>
+                                    <th className="py-2 text-center">D</th>
+                                    <th className="py-2 text-center">L</th>
+                                    <th className="py-2 text-center">GF</th>
+                                    <th className="py-2 text-center">GA</th>
+                                    <th className="py-2 text-center">GD</th>
+                                    <th className="py-2 text-right">PTS</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#2A2A28]/50">
+                                  {standings.map((standing) => (
+                                    <tr key={standing.team.id} className="hover:bg-neutral-900/30">
+                                      <td className="py-2.5 text-[#D9622B]">{standing.position}</td>
+                                      <td className="py-2.5 font-semibold text-white">
+                                        {standing.team.flag} {standing.team.name}
+                                      </td>
+                                      <td className="py-2.5 text-center">{standing.played}</td>
+                                      <td className="py-2.5 text-center">{standing.won}</td>
+                                      <td className="py-2.5 text-center">{standing.drawn}</td>
+                                      <td className="py-2.5 text-center">{standing.lost}</td>
+                                      <td className="py-2.5 text-center">{standing.goals_for}</td>
+                                      <td className="py-2.5 text-center">{standing.goals_against}</td>
+                                      <td className="py-2.5 text-center">
+                                        {standing.goals_for - standing.goals_against > 0 ? '+' : ''}
+                                        {standing.goals_for - standing.goals_against}
+                                      </td>
+                                      <td className="py-2.5 text-right font-bold">{standing.points}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </>
+                      );
+                    }
+
+                    const stageMap: Record<string, string> = { QF: 'QUARTER_FINALS', SF: 'SEMI_FINALS', F: 'FINAL' };
+                    const stageTarget = stageMap[selectedGroup];
+                    const stageMatches = matches.filter((m) => m.stage === stageTarget);
+
+                    return (
+                      <div className="space-y-4">
+                        {stageMatches.length === 0 ? (
+                          <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-8 text-center">
+                            <span className="mono text-[0.65rem] text-neutral-500">
+                              No matches found for {selectedGroup === 'F' ? 'the Final' : selectedGroup === 'SF' ? 'Semi-Finals' : 'Quarter-Finals'}.
+                            </span>
+                          </div>
+                        ) : (
+                          [...stageMatches]
+                            .sort((a, b) => (b.date||'').localeCompare(a.date||''))
+                            .map((match) => (
+                              <div
+                                key={match.match_id}
+                                className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 hover:bg-[#171715]/60 transition-colors cursor-pointer"
+                                onClick={() => handleMatchClick(match.match_id)}
+                              >
+                                <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                                  <div className="flex items-center gap-6">
+                                    <span className="mono text-[0.75rem] text-[#D9622B] font-bold">[ {match.match_id} ]</span>
+                                    <div>
+                                      <div className="flex items-center gap-4 text-[0.95rem] font-semibold text-white">
+                                        <span>{match.home_team.flag} {match.home_team.name}</span>
+                                        <span className="text-neutral-500">vs</span>
+                                        <span>{match.away_team.flag} {match.away_team.name}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-6">
+                                    <div className="mono text-xl font-bold text-[#D9622B] border border-[#D9622B]/20 bg-[#D9622B]/5 px-4 py-2 rounded">
+                                      {match.score.home} - {match.score.away}
+                                    </div>
+                                    <span className={`mono text-[0.65rem] px-2 py-0.5 rounded ${
+                                      match.status === 'Finished'
+                                        ? 'bg-neutral-700 text-neutral-300'
+                                        : 'bg-[#D9622B]/20 text-[#D9622B] animate-pulse'
+                                    }`}>
+                                      {match.status}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1079,11 +1050,11 @@ export default function App() {
                     <ErrorState message={dashboardError['matches']} onRetry={fetchMatches} />
                   ) : (
                     <div className="space-y-4">
-                      {matches.map((match) => (
+                      {[...matches].sort((a, b) => (b.date||'').localeCompare(a.date||'')).map((match) => (
                         <div
                           key={match.match_id}
                           className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 hover:bg-[#171715]/60 transition-colors cursor-pointer"
-                          onClick={() => setSelectedMatchId(match.match_id)}
+                          onClick={() => handleMatchClick(match.match_id)}
                         >
                           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                             <div className="flex items-center gap-6">
@@ -1289,25 +1260,22 @@ export default function App() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-              {/* Gated Prediction panel */}
+              {/* Prediction panel */}
               <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between relative overflow-hidden">
                 <div>
                   <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ OUTCOME_PREDICTION ]</h3>
 
                   {(() => {
                     const path = `/predict/match/${selectedMatchId}`;
-                    if (premiumLoading[path]) return <LoadingState label="REQUESTING ENGINES..." />;
-                    if (premiumError[path]) {
-                      return <ErrorState message={premiumError[path]} onRetry={() => fetchPrediction(selectedMatchId)} />;
+                    if (toolLoading[path]) return <LoadingState label="REQUESTING ENGINES..." />;
+                    if (toolError[path]) {
+                      return <ErrorState message={toolError[path]} onRetry={() => fetchPrediction(selectedMatchId)} />;
                     }
                     if (!predictionData) {
                       return (
-                        <LockedPreview
-                          title="AI MATCH PREDICTION"
-                          description="Unlock form-weighted win probabilities and an AI scoreline writeup for this fixture."
-                          amountUsdc="0.05"
-                          onUnlock={() => fetchPrediction(selectedMatchId)}
-                        />
+                        <div className="border border-[#2A2A28] bg-black/20 rounded p-6 text-[0.75rem] text-neutral-400">
+                          Match prediction is not available yet. Please wait for the analyst service to respond or retry.
+                        </div>
                       );
                     }
                     return (
@@ -1346,38 +1314,26 @@ export default function App() {
                 </div>
 
                 <div className="border-t border-[#2A2A28] pt-4 mt-6">
-                  {receipts[`/predict/match/${selectedMatchId}`] ? (
-                    <PaymentBadge
-                      amountLabel="0.05 USDC"
-                      tx={receipts[`/predict/match/${selectedMatchId}`].tx}
-                    />
-                  ) : (
-                    <div className="mono text-[0.55rem] text-neutral-500">
-                      STATUS: PENDING_MICROPAYMENT
-                    </div>
-                  )}
+                  <div className="mono text-[0.55rem] text-neutral-500">STATUS: ANALYSIS PIPELINE ENABLED</div>
                 </div>
               </div>
 
-              {/* Gated Post-match Breakdown */}
+              {/* Post-match Breakdown */}
               <div className="lg:col-span-2 border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between relative overflow-hidden">
                 <div className="flex-1 flex flex-col min-h-0">
                   <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ POST_MATCH_TACTICAL_BREAKDOWN ]</h3>
 
                   {(() => {
                     const path = `/tactical/match/${selectedMatchId}`;
-                    if (premiumLoading[path]) return <LoadingState label="COMPILING TELEMETRY STATS..." />;
-                    if (premiumError[path]) {
-                      return <ErrorState message={premiumError[path]} onRetry={() => fetchTacticalBreakdown(selectedMatchId)} />;
+                    if (toolLoading[path]) return <LoadingState label="COMPILING TELEMETRY STATS..." />;
+                    if (toolError[path]) {
+                      return <ErrorState message={toolError[path]} onRetry={() => fetchTacticalBreakdown(selectedMatchId)} />;
                     }
                     if (!breakdownData) {
                       return (
-                        <LockedPreview
-                          title="TACTICAL BREAKDOWN"
-                          description="Pay to unlock a post-match formation writeup with shot, possession, and set-piece telemetry."
-                          amountUsdc="0.10"
-                          onUnlock={() => fetchTacticalBreakdown(selectedMatchId)}
-                        />
+                        <div className="border border-[#2A2A28] bg-black/20 rounded p-6 text-[0.75rem] text-neutral-400">
+                          Tactical breakdown is not ready yet. Please wait for the analysis service or try again.
+                        </div>
                       );
                     }
                     return (
@@ -1410,13 +1366,7 @@ export default function App() {
                 </div>
 
                 <div className="border-t border-[#2A2A28] pt-4 mt-6 flex justify-between items-center">
-                  <span className="mono text-[0.6rem] text-neutral-500">USDC_FACILITATOR: CIRCLE_CCTP</span>
-                  {receipts[`/tactical/match/${selectedMatchId}`] && (
-                    <PaymentBadge
-                      amountLabel="0.10 USDC"
-                      tx={receipts[`/tactical/match/${selectedMatchId}`].tx}
-                    />
-                  )}
+                  <span className="mono text-[0.6rem] text-neutral-500">ANALYSIS_PIPELINE: READY</span>
                 </div>
               </div>
 
@@ -1471,7 +1421,7 @@ export default function App() {
                 <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ K-MEANS_CLUSTERING_Archetypes ]</span>
                 <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">PLAYER STYLE ANALYSIS</h1>
               </div>
-              <span className="mono text-[0.6rem] text-neutral-500">COMPILERS: SCIKIT-LEARN KMeans</span>
+              <span className="mono text-[0.6rem] text-neutral-500">COMPILER: SCIKIT-LEARN KMeans · K={clusterStats?.k ?? '?'}</span>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1492,7 +1442,7 @@ export default function App() {
                       className="w-full bg-[#0E0E0E] border border-[#2A2A28] rounded px-3 py-2 text-[0.75rem] text-white focus:outline-none focus:border-[#D9622B] font-jetbrains"
                     >
                       {players.length > 0 ? (
-                        players.slice(0, 30).map(p => (
+                        players.map(p => (
                           <option key={p.player_id} value={p.player_id}>
                             {p.name} ({p.position})
                           </option>
@@ -1507,11 +1457,11 @@ export default function App() {
                 <div className="pt-6 border-t border-[#2A2A28] mt-6">
                   <div className="mono text-[0.6rem] text-neutral-500 flex justify-between">
                     <span>SILHOUETTE_SCORE:</span>
-                    <span className="text-[#D9622B] font-bold">0.226</span>
+                    <span className="text-[#D9622B] font-bold">{clusterStats?.silhouette_score?.toFixed(3) ?? '—'}</span>
                   </div>
                   <div className="mono text-[0.6rem] text-neutral-500 flex justify-between mt-1.5">
                     <span>ARCHETYPE_CLUSTERS:</span>
-                    <span className="text-white">K=5</span>
+                    <span className="text-white">K={clusterStats?.k ?? '—'}</span>
                   </div>
                 </div>
               </div>
@@ -1520,21 +1470,19 @@ export default function App() {
               <div className="lg:col-span-2 border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between min-h-[300px]">
                 {(() => {
                   const path = `/cluster/player/${selectedPlayer}`;
-                  if (premiumLoading[path]) {
+                  if (toolLoading[path]) {
                     return <LoadingState label="RETRIEVING MULTIVARIATE DATA..." className="flex-1" />;
                   }
-                  if (premiumError[path]) {
-                    return <ErrorState message={premiumError[path]} onRetry={() => fetchClustering(selectedPlayer)} />;
+                  if (toolError[path]) {
+                    return <ErrorState message={toolError[path]} onRetry={() => fetchClustering(selectedPlayer)} />;
                   }
                   if (!playerClusterData) {
                     const selectedMeta = players.find((p) => p.player_id === selectedPlayer);
                     return (
-                      <LockedPreview
-                        title="PLAYER STYLE CLUSTER"
-                        description={`Unlock archetype + nearest neighbors for ${selectedMeta?.name || selectedPlayer}. Free PCA map stays visible below.`}
-                        amountUsdc="0.01"
-                        onUnlock={() => fetchClustering(selectedPlayer)}
-                      />
+                      <div className="border border-[#2A2A28] bg-black/20 rounded p-6 text-[0.75rem] text-neutral-400">
+                        Player style analysis is being prepared for <span className="font-semibold text-white">{selectedMeta?.name || selectedPlayer}</span>.
+                        Please retry in a moment if the data does not appear automatically.
+                      </div>
                     );
                   }
                   return (
@@ -1548,9 +1496,7 @@ export default function App() {
                             </div>
                           </div>
 
-                          {receipts[path] && (
-                            <PaymentBadge amountLabel="0.01 USDC" tx={receipts[path].tx} />
-                          )}
+                          <div className="mono text-[0.6rem] text-neutral-500">PLAYER_ANALYSIS: ACTIVE</div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
@@ -1560,7 +1506,7 @@ export default function App() {
                               {playerClusterData.player.archetype.toUpperCase()}
                             </div>
                             <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed mt-2.5">
-                              Assigned based on Goals, Assists, Key Passes, and Tackles per 90 telemetry.
+                              Assigned from {playerClusterData.model?.k ?? '?'} clusters across {(playerClusterData.model?.features ?? []).length} dimensions (Goals, Assists, Key Passes, Tackles, Interceptions, Pass Acc. per 90).
                             </p>
                           </div>
 
@@ -1613,7 +1559,8 @@ export default function App() {
                       const cx = 500 + px * 90;
                       const cy = 200 - py * 90;
                       const isSelected = p.player_id === selectedPlayer;
-                      const clusterColor = p.cluster === 0 ? '#D9622B' : p.cluster === 1 ? '#6ba642' : p.cluster === 2 ? '#3b82f6' : p.cluster === 3 ? '#a855f7' : '#eab308';
+                      const clusterIdx = p.cluster ?? 0;
+                      const clusterColor = CLUSTER_COLORS[clusterIdx % CLUSTER_COLORS.length];
 
                       return (
                         <circle
@@ -1622,13 +1569,44 @@ export default function App() {
                           cy={cy}
                           r={isSelected ? 6 : 2.5}
                           fill={isSelected ? '#D9622B' : clusterColor}
-                          stroke={isSelected ? '#white' : 'transparent'}
+                          stroke={isSelected ? 'white' : 'transparent'}
                           strokeWidth={2}
                           className="cursor-pointer transition hover:r-5 opacity-75"
                           onClick={() => setSelectedPlayer(p.player_id)}
+                          onMouseEnter={(e) => {
+                            const rect = (e.target as SVGElement).closest('svg')?.getBoundingClientRect();
+                            if (rect) setScatterTooltip({ player: p, x: e.clientX - rect.left, y: e.clientY - rect.top });
+                          }}
+                          onMouseMove={(e) => {
+                            const rect = (e.target as SVGElement).closest('svg')?.getBoundingClientRect();
+                            if (rect) setScatterTooltip(t => t ? { ...t, x: e.clientX - rect.left, y: e.clientY - rect.top } : null);
+                          }}
+                          onMouseLeave={() => setScatterTooltip(null)}
                         />
                       );
                     })}
+
+                    {scatterTooltip && (
+                      <g>
+                        <rect
+                          x={scatterTooltip.x + 12}
+                          y={scatterTooltip.y - 20}
+                          width={180}
+                          height={38}
+                          rx={4}
+                          fill="black"
+                          fillOpacity={0.85}
+                          stroke="#D9622B"
+                          strokeWidth={0.5}
+                        />
+                        <text x={scatterTooltip.x + 18} y={scatterTooltip.y - 4} fill="white" className="mono" fontSize="11" fontWeight="bold">
+                          {scatterTooltip.player.name}
+                        </text>
+                        <text x={scatterTooltip.x + 18} y={scatterTooltip.y + 12} fill="#aaa" className="mono" fontSize="10">
+                          {scatterTooltip.player.archetype || '—'}
+                        </text>
+                      </g>
+                    )}
 
                     {(() => {
                       const target = players.find(p => p.player_id === selectedPlayer);
@@ -1646,27 +1624,20 @@ export default function App() {
                 )}
 
                 {/* Plot legend */}
-                <div className="absolute bottom-4 left-4 flex flex-wrap gap-4 bg-black/80 border border-neutral-800 p-3 rounded">
-                  <div className="flex items-center gap-1.5 text-[0.6rem] mono">
-                    <span className="w-2 h-2 bg-[#D9622B] rounded-full" />
-                    <span>STRIKER</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[0.6rem] mono">
-                    <span className="w-2 h-2 bg-[#6ba642] rounded-full" />
-                    <span>PLAYMAKER</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[0.6rem] mono">
-                    <span className="w-2 h-2 bg-[#3b82f6] rounded-full" />
-                    <span>DEFENDER</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[0.6rem] mono">
-                    <span className="w-2 h-2 bg-[#a855f7] rounded-full" />
-                    <span>MIDFIELDER</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[0.6rem] mono">
-                    <span className="w-2 h-2 bg-[#eab308] rounded-full" />
-                    <span>FULLBACK</span>
-                  </div>
+                <div className="absolute bottom-4 left-4 flex flex-wrap gap-4 bg-black/80 border border-neutral-800 p-3 rounded max-w-[90%]">
+                  {(clusterStats?.clusters ?? []).map((c) => (
+                    <div key={c.cluster_id} className="flex items-center gap-1.5 text-[0.6rem] mono">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: CLUSTER_COLORS[c.cluster_id % CLUSTER_COLORS.length] }} />
+                      <span>{c.archetype.toUpperCase()}</span>
+                    </div>
+                  ))}
+                  {!clusterStats && (
+                    <>
+                      <div className="flex items-center gap-1.5 text-[0.6rem] mono"><span className="w-2 h-2 bg-[#D9622B] rounded-full" /><span>ELITE GOALSCORER</span></div>
+                      <div className="flex items-center gap-1.5 text-[0.6rem] mono"><span className="w-2 h-2 bg-[#6ba642] rounded-full" /><span>PLAYMAKER</span></div>
+                      <div className="flex items-center gap-1.5 text-[0.6rem] mono"><span className="w-2 h-2 bg-[#3b82f6] rounded-full" /><span>BALL WINNER</span></div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1681,33 +1652,29 @@ export default function App() {
                 <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ RMS_VOLUME_SPIKE_CLIPPER ]</span>
                 <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">HIGHLIGHT TELEMETRY</h1>
               </div>
-              <span className="mono text-[0.6rem] text-neutral-500">USDC_PRICE: 0.08 USDC</span>
+              <span className="mono text-[0.6rem] text-neutral-500">HIGHLIGHT_DETECTOR: ACTIVE</span>
             </div>
 
             <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
               {(() => {
                 const path = `/highlights/match/${selectedMatchId}`;
-                if (premiumLoading[path]) {
+                if (toolLoading[path]) {
                   return <LoadingState label="EXTRACTING DECIBEL SPIKES..." className="py-20" />;
                 }
-                if (premiumError[path]) {
-                  return <ErrorState message={premiumError[path]} onRetry={() => fetchHighlights(selectedMatchId)} />;
+                if (toolError[path]) {
+                  return <ErrorState message={toolError[path]} onRetry={() => fetchHighlights(selectedMatchId)} />;
                 }
                 if (highlightsData.length === 0) {
                   return (
-                    <LockedPreview
-                      title="HIGHLIGHT TELEMETRY"
-                      description="Unlock RMS loudness peak clips for this match. Audio analysis runs after micropayment settles."
-                      amountUsdc="0.08"
-                      onUnlock={() => fetchHighlights(selectedMatchId)}
-                      className="py-8"
-                    />
+                    <div className="border border-[#2A2A28] bg-black/20 rounded p-6 text-[0.75rem] text-neutral-400">
+                      Highlight telemetry is not available yet. Please retry or wait while the service prepares the match clip data.
+                    </div>
                   );
                 }
                 return (
                   <div className="space-y-8">
                     <div className="flex justify-end">
-                      {receipts[path] && <PaymentBadge amountLabel="0.08 USDC" tx={receipts[path].tx} />}
+                      <span className="mono text-[0.55rem] text-neutral-500">HIGHLIGHTS_STATUS: READY</span>
                     </div>
                     <div className="border border-[#2A2A28] bg-black/40 p-4 rounded">
                       <div className="mono text-[0.55rem] text-neutral-500 mb-2 uppercase">AUDIO_RMS_ENERGY (SPIKES LOCATED)</div>
@@ -1805,7 +1772,7 @@ export default function App() {
       "args": ["-y", "fullback-mcp-server"],
       "env": {
         "EVM_PRIVATE_KEY": "0x9ed482fC5A356964b0405D...",
-        "RESOURCE_SERVER_URL": "http://localhost:8000"
+        "RESOURCE_SERVER_URL": "${API_BASE}"
       }
     }
   }
@@ -1844,22 +1811,146 @@ export default function App() {
       {/* Shared Footer component */}
       <footer className="h-16 border-t border-[#2A2A28] bg-[#0E0E0E]/40 px-8 flex items-center justify-between text-[0.6rem] text-neutral-500 z-10">
         <span className="mono">© 2026 FULL BACK // SUBMISSION FOR INJECTIVE GLOBAL CUP</span>
-        <span className="mono">SETTLEMENTS: CIRCLE CCTP EVM v2</span>
+        <span className="mono">ALL FEATURES: FREELY ACCESSIBLE</span>
       </footer>
 
-      {paywallRequired && (
-        <PaywallModal
-          paywall={paywallRequired}
-          paymentStatus={paymentStatus}
-          paymentTx={paymentTx}
-          onAbort={() => {
-            const rejectFn = paywallRequired.reject;
-            setPaywallRequired(null);
-            rejectFn(new Error('User aborted payment'));
-          }}
-          onSettle={handlePaywallSettle}
-        />
+      {/* Match Detail Modal */}
+      {matchDetail && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none animate-fade-in" onClick={() => setMatchDetail(null)}>
+          <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[#2A2A28] bg-[#171715] rounded shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            {/* Close button */}
+            <div className="sticky top-0 z-10 flex justify-end p-3 bg-[#171715]/90">
+              <button onClick={() => setMatchDetail(null)} className="mono text-[0.65rem] text-neutral-500 hover:text-[#D9622B] transition px-3 py-1 border border-[#2A2A28] rounded">
+                CLOSE [X]
+              </button>
+            </div>
+
+            {/* Match header */}
+            <div className="px-6 pb-6 border-b border-[#2A2A28]">
+              <div className="flex justify-between items-center mb-4">
+                <span className="mono text-[0.6rem] text-[#D9622B] tracking-widest">[ MATCH_{matchDetail.match_id} ]</span>
+                <span className={`mono text-[0.6rem] px-2 py-0.5 rounded ${
+                  matchDetail.status === 'Finished'
+                    ? 'bg-neutral-700 text-neutral-300'
+                    : 'bg-[#D9622B]/20 text-[#D9622B] animate-pulse'
+                }`}>{matchDetail.status}</span>
+              </div>
+
+              <div className="flex items-center justify-center gap-6 py-6">
+                <div className="text-center flex-1">
+                  <div className="text-4xl mb-2">{matchDetail.home_team.flag || '⚽'}</div>
+                  <div className="font-syncopate text-[0.85rem] font-bold text-white tracking-wider">{matchDetail.home_team.name}</div>
+                  <div className="mono text-[0.6rem] text-neutral-500 mt-1">{matchDetail.home_team.code}</div>
+                </div>
+                <div className="text-center">
+                  <div className="mono text-3xl font-bold text-[#D9622B] border border-[#D9622B]/30 bg-[#D9622B]/5 px-6 py-3 rounded">
+                    {matchDetail.score.home} - {matchDetail.score.away}
+                  </div>
+                </div>
+                <div className="text-center flex-1">
+                  <div className="text-4xl mb-2">{matchDetail.away_team.flag || '⚽'}</div>
+                  <div className="font-syncopate text-[0.85rem] font-bold text-white tracking-wider">{matchDetail.away_team.name}</div>
+                  <div className="mono text-[0.6rem] text-neutral-500 mt-1">{matchDetail.away_team.code}</div>
+                </div>
+              </div>
+
+              {matchDetail.date && (
+                <div className="text-center mono text-[0.6rem] text-neutral-500">
+                  {new Date(matchDetail.date).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              )}
+            </div>
+
+            {/* Stats section — only show if stats exist and not all zero */}
+            {(() => {
+              const s = matchDetail.stats;
+              if (!s) return null;
+              const hasData = Object.values(s).some((v: any) => v?.home || v?.away);
+              if (!hasData) return null;
+              return (
+                <div className="px-6 py-5 border-b border-[#2A2A28]">
+                  <h3 className="mono text-[0.65rem] text-[#D9622B] tracking-widest uppercase mb-4">[ MATCH_STATS ]</h3>
+                  <div className="space-y-3">
+                    {[
+                      { label: 'POSSESSION', key: 'possession' },
+                      { label: 'SHOTS', key: 'shots' },
+                      { label: 'SHOTS ON TARGET', key: 'shots_on_target' },
+                      { label: 'PASSES', key: 'passes' },
+                      { label: 'PASS ACCURACY', key: 'pass_accuracy' },
+                      { label: 'FOULS', key: 'fouls' },
+                      { label: 'CORNERS', key: 'corners' },
+                      { label: 'SAVES', key: 'saves' },
+                    ].map(({ label, key }) => {
+                      const stat = matchDetail.stats?.[key];
+                      if (!stat) return null;
+                      return (
+                        <div key={key} className="flex items-center gap-3 text-[0.7rem] mono">
+                          <span className="w-10 text-right font-semibold text-white">{stat.home}</span>
+                          <div className="flex-1 h-1.5 bg-neutral-900 rounded overflow-hidden">
+                            <div
+                              className="h-full bg-[#D9622B] rounded"
+                              style={{ width: `${Math.min(100, (stat.home / (stat.home + stat.away || 1)) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="w-20 text-center text-neutral-500 uppercase tracking-wider">{label}</span>
+                          <div className="flex-1 h-1.5 bg-neutral-900 rounded overflow-hidden">
+                            <div
+                              className="h-full bg-neutral-400 rounded"
+                              style={{ width: `${Math.min(100, (stat.away / (stat.home + stat.away || 1)) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="w-10 text-left font-semibold text-white">{stat.away}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Events timeline */}
+            {matchDetail.events && matchDetail.events.length > 0 && (
+              <div className="px-6 py-5">
+                <h3 className="mono text-[0.65rem] text-[#D9622B] tracking-widest uppercase mb-4">[ EVENTS ]</h3>
+                <div className="relative border-l border-[#2A2A28] ml-3 space-y-5">
+                  {matchDetail.events.map((evt: any, idx: number) => (
+                    <div key={idx} className="relative pl-6">
+                      <div className={`absolute -left-[5px] top-1 w-2.5 h-2.5 rounded-full border-2 ${
+                        evt.type === 'goal'
+                          ? 'bg-[#D9622B] border-[#D9622B]'
+                          : evt.type === 'card' && evt.detail?.includes('Yellow')
+                          ? 'bg-yellow-400 border-yellow-400'
+                          : evt.type === 'card'
+                          ? 'bg-red-400 border-red-400'
+                          : 'bg-neutral-600 border-neutral-600'
+                      }`} />
+                      <div className="flex items-center gap-3">
+                        <span className="mono text-[0.65rem] text-[#D9622B] font-bold w-10">{evt.time}'</span>
+                        <span className="mono text-[0.7rem] text-white font-semibold">{evt.player}</span>
+                        <span className="mono text-[0.6rem] text-neutral-500 capitalize">{evt.detail?.toLowerCase() || evt.type}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!matchDetail.stats && !matchDetail.events && matchDetailLoading && (
+              <div className="px-6 py-12 text-center">
+                <div className="w-6 h-6 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin mx-auto mb-3" />
+                <span className="mono text-[0.6rem] text-neutral-500">LOADING MATCH TELEMETRY...</span>
+              </div>
+            )}
+
+            {matchDetailError && (
+              <div className="px-6 py-5 text-center">
+                <span className="mono text-[0.65rem] text-red-400">ERROR: {matchDetailError}</span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
+
     </div>
   );
 }

@@ -18,6 +18,7 @@ import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import List, Dict, Any
 from sklearn.preprocessing import StandardScaler
@@ -25,9 +26,117 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 
-app = FastAPI(title="FULL BACK Data Science Service", version="1.0.0")
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_PATH = os.path.join(_SCRIPT_DIR, "data", "players_stats.csv")
 
-# Enable CORS for frontend dashboard queries
+# Global cache for processed data
+processed_data: Dict[str, Any] = {}
+_data_ready = False
+
+def process_clustering():
+    global _data_ready
+    if not os.path.exists(CSV_PATH):
+        print(f"Player stats dataset not found at {CSV_PATH}")
+        return
+
+    df = pd.read_csv(CSV_PATH)
+    df = df[df["position"] != "Goalkeeper"].copy()
+    df["player_id"] = df["player_id"].apply(lambda x: f"PL{int(x):06d}")
+
+    for col in ["goals_per_90", "assists_per_90", "key_passes", "tackles", "interceptions"]:
+        if col not in df.columns:
+            df[col] = 0
+
+    df["goals_per_90"] = (df["goals"] / df["minutes_played"]).replace([np.inf, -np.inf], 0).fillna(0) * 90
+    df["assists_per_90"] = (df["assists"] / df["minutes_played"]).replace([np.inf, -np.inf], 0).fillna(0) * 90
+    df["key_passes_per_90"] = (df["key_passes"] / df["minutes_played"]).replace([np.inf, -np.inf], 0).fillna(0) * 90
+    df["tackles_per_90"] = (df["tackles"] / df["minutes_played"]).replace([np.inf, -np.inf], 0).fillna(0) * 90
+    df["interceptions_per_90"] = (df["interceptions"] / df["minutes_played"]).replace([np.inf, -np.inf], 0).fillna(0) * 90
+    df["pass_accuracy"] = df.get("pass_accuracy", pd.Series(75.0, index=df.index)).fillna(75.0)
+
+    features = [
+        "goals_per_90", "assists_per_90", "key_passes_per_90",
+        "tackles_per_90", "interceptions_per_90", "pass_accuracy",
+    ]
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(df[features])
+
+    best_k, best_score = 5, -1
+    print("Searching optimal K (3..7)...")
+    for k in range(3, 8):
+        km = KMeans(n_clusters=k, random_state=42, n_init=5)
+        labels = km.fit_predict(X_scaled)
+        s = silhouette_score(X_scaled, labels)
+        print(f"  K={k}: silhouette={s:.4f}")
+        if s > best_score:
+            best_score, best_k = s, k
+
+    sil_score = best_score
+    print(f"Best K={best_k} (silhouette={sil_score:.4f}). Fitting final model...")
+    kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(X_scaled)
+    df["cluster"] = labels
+
+    centroids = scaler.inverse_transform(kmeans.cluster_centers_)
+    centroid_df = pd.DataFrame(centroids, columns=features)
+    g_mean, g_std = centroid_df["goals_per_90"].mean(), centroid_df["goals_per_90"].std()
+    a_mean, a_std = centroid_df["assists_per_90"].mean(), centroid_df["assists_per_90"].std()
+    kp_mean = centroid_df["key_passes_per_90"].mean()
+    t_mean, t_std = centroid_df["tackles_per_90"].mean(), centroid_df["tackles_per_90"].std()
+
+    cluster_labels = {}
+    for cid in range(best_k):
+        row = centroid_df.loc[cid]
+        tags = []
+        if row["goals_per_90"] > g_mean + g_std * 0.5:
+            tags.append("Elite Goalscorer")
+        elif row["goals_per_90"] > g_mean:
+            tags.append("Goal Threat")
+        if row["assists_per_90"] > a_mean + a_std * 0.5:
+            tags.append("Creative Playmaker")
+        elif row["assists_per_90"] > a_mean:
+            tags.append("Playmaker")
+        if row["key_passes_per_90"] > kp_mean + 0.3:
+            tags.append("Chance Creator")
+        if row["tackles_per_90"] > t_mean + t_std * 0.5:
+            tags.append("Ball Winner")
+        if not tags:
+            tags.append("Contributor")
+        cluster_labels[cid] = " · ".join(tags[:2])
+
+    df["archetype"] = df["cluster"].map(cluster_labels)
+    for i, feat in enumerate(features):
+        df[f"{feat}_scaled"] = X_scaled[:, i]
+
+    pca = PCA(n_components=2)
+    coords = pca.fit_transform(X_scaled)
+    df["pca_x"] = coords[:, 0]
+    df["pca_y"] = coords[:, 1]
+
+    processed_data["df"] = df
+    processed_data["X_scaled"] = X_scaled
+    processed_data["features"] = features
+    processed_data["scaler"] = scaler
+    processed_data["silhouette_score"] = sil_score
+    processed_data["best_k"] = best_k
+    processed_data["pca_variance"] = pca.explained_variance_ratio_.tolist()
+    processed_data["archetypes"] = cluster_labels
+    _data_ready = True
+
+    print(f"Clustering model loaded on {len(df)} outfield players. Best K={best_k}, Silhouette: {sil_score:.3f}")
+    print(f"Features: {features}")
+    print(f"Archetypes: {cluster_labels}")
+    print(f"Cluster sizes:\n{df['cluster'].value_counts().sort_index()}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    import threading
+    t = threading.Thread(target=process_clustering, daemon=True)
+    t.start()
+    yield
+
+app = FastAPI(title="FULL BACK Data Science Service", version="1.0.0", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,141 +145,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-CSV_PATH = "data/player_clusters.csv"
-
-# Global cache for processed data
-processed_data: Dict[str, Any] = {}
-
-def process_clustering():
-    if not os.path.exists(CSV_PATH):
-        raise FileNotFoundError(f"Player stats dataset not found at {CSV_PATH}")
-
-    # Load data (already processed by build_clusters.py!)
-    df = pd.read_csv(CSV_PATH)
-    
-    # Rename columns to keep compatibility with existing API endpoints!
-    df = df.rename(columns={
-        "total_goals": "goals",
-        "total_assists": "assists",
-        "total_minutes_played": "minutes_played"
-    })
-    # Add placeholder columns for compatibility with existing code that expects them
-    for col in ["key_passes", "tackles", "interceptions", "pass_accuracy"]:
-        df[col] = 0  # These weren't in our original dataset
-    
-    # Get scaled features from the precomputed columns
-    scaled_cols = [c for c in df.columns if c.endswith("_scaled")]
-    X_scaled = df[scaled_cols].values
-    
-    # Calculate silhouette score from existing clusters
-    sil_score = float(silhouette_score(X_scaled, df["cluster"].values))
-    
-    # Create archetypes mapping
-    archetypes = {}
-    for c_id in df["cluster"].unique():
-        archetypes[int(c_id)] = df[df["cluster"] == c_id]["archetype"].iloc[0]
-
-    # Add PCA placeholders for compatibility
-    df["pca_x"] = 0
-    df["pca_y"] = 0
-
-    # Store in global cache
-    processed_data["df"] = df
-    processed_data["X_scaled"] = X_scaled
-    processed_data["features"] = ["goals_per_90", "assists_per_90"]
-    processed_data["silhouette_score"] = sil_score
-    processed_data["archetypes"] = archetypes
-    
-    print(f"Clustering model loaded. Silhouette Score: {sil_score:.3f}")
-
-# Perform clustering on startup
-try:
-    process_clustering()
-except Exception as e:
-    print(f"Error loading player dataset on startup: {e}")
-
-import base64
 import json
 import requests
-from fastapi import Request, Header, Depends
-from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from sports_api import (
+    get_wc_standings,
+    get_wc_matches,
+    get_team_matches,
+    extract_standings_for_group,
+    extract_all_standings_by_group,
+    extract_matches,
+    extract_team_form,
+    WC_TEAM_IDS,
+    _flag_for_country,
+)
 
-# Custom Payment Required Exception and Handler
-class PaymentRequiredException(Exception):
-    def __init__(self, resource: str, amount: str, description: str):
-        self.resource = resource
-        self.amount = amount
-        self.description = description
+os.makedirs("public/highlights", exist_ok=True)
+app.mount("/public", StaticFiles(directory="public"), name="public")
 
-def get_payment_required_header(resource_path: str, amount: str, desc: str) -> str:
-    payload = {
-        "x402Version": 1,
-        "accepts": [
-            {
-                "scheme": "exact",
-                "network": "eip155:84532",  # Base Sepolia
-                "maxAmountRequired": amount,
-                "resource": resource_path,
-                "payTo": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",  # Demo merchant address
-                "asset": "0x036eFd41E265914E01E7574432c40e16414777a8",  # Base Sepolia USDC
-                "maxTimeoutSeconds": 60,
-                "description": desc
-            }
-        ],
-        "error": "PAYMENT-SIGNATURE header is required"
-    }
-    json_bytes = json.dumps(payload).encode("utf-8")
-    return base64.b64encode(json_bytes).decode("utf-8")
-
-@app.exception_handler(PaymentRequiredException)
-async def payment_required_exception_handler(request: Request, exc: PaymentRequiredException):
-    req_header = get_payment_required_header(exc.resource, exc.amount, exc.description)
-    return JSONResponse(
-        status_code=402,
-        content={"error": "Payment Required", "message": exc.description},
-        headers={
-            "PAYMENT-REQUIRED": req_header,
-            "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE"
-        }
-    )
-
-# FastAPI Dependency to verify EIP-3009 payment signatures
-async def verify_x402_payment(
-    request: Request,
-    payment_signature: str = Header(None, alias="payment-signature")
-):
-    path = request.url.path
-    
-    amount = "10000"
-    desc = "Access premium analytics"
-    
-    if "/cluster/player/" in path:
-        amount = "10000"  # 0.01 USDC
-        desc = "Access premium player similarity clustering data"
-    elif "/predict/match/" in path:
-        amount = "50000"  # 0.05 USDC
-        desc = "Generate AI premium match outcome prediction"
-    elif "/tactical/match/" in path:
-        amount = "100000"  # 0.10 USDC
-        desc = "Generate premium tactical match breakdown writeup"
-    elif "/highlights/match/" in path or "/generate_highlights/" in path:
-        amount = "80000"  # 0.08 USDC
-        desc = "Generate premium match highlight clips from audio telemetry"
-
-    if not payment_signature:
-        raise PaymentRequiredException(resource=path, amount=amount, description=desc)
-        
-    try:
-        # Decode Base64 EIP-3009 auth details
-        decoded_bytes = base64.b64decode(payment_signature)
-        sig_payload = json.loads(decoded_bytes.decode("utf-8"))
-        print(f"Verified payment signature for {path}:", sig_payload)
-        
-        # Verify basic EIP-3009 parameter alignment
-        if sig_payload.get("amount") and str(sig_payload.get("amount")) != amount:
-            print(f"Warning: Signature amount {sig_payload.get('amount')} differs from required {amount}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid payment signature header: {e}")
+def ensure_data():
+    if not _data_ready:
+        process_clustering()
+    if "df" not in processed_data:
+        raise HTTPException(status_code=503, detail="Data not yet loaded")
 
 # Helper to call Gemini API
 def call_gemini_api(prompt: str) -> str:
@@ -310,153 +307,133 @@ team_forms_db = {
     "MAR": {"team_id": "MAR", "team_name": "Morocco", "form": "WDLWW", "recent_matches": [], "goals_scored": 7, "goals_conceded": 6, "clean_sheets": 1},
 }
 
-# API Sports Team ID Map
-API_SPORTS_TEAM_IDS = {
-    "USA": 33,
-    "COL": 42,
-    "GER": 50,
-    "JPN": 47,
-    "ARG": 40,
-    "FRA": 49,
-    "MAR": 34,
-    "ESP": 35,
-    "ITA": 45,
-    "BRA": 66,
-    "CRO": 36,
-    "MUN": 33,
-    "ARS": 42,
-    "MCI": 50,
-    "LIV": 40,
-    "CHE": 49,
-    "TOT": 47,
-    "MAN": 33,
-    "FUL": 36,
-    "NEW": 34,
-    "AVL": 66,
-    "BHA": 51,
-    "WHU": 48,
-    "CRY": 52,
-    "BOU": 35,
-    "EVE": 45,
-    "BRE": 55,
-    "NFO": 65,
-    "LEI": 46,
-    "WOL": 39,
-    "SOU": 41,
-    "IPS": 57
+# Football Data.org Team ID Map
+FOOTBALL_DATA_TEAM_IDS = {
+    "USA": 2167,
+    "COL": 2183,
+    "GER": 2083,
+    "JPN": 2102,
+    "ARG": 2028,
+    "FRA": 2061,
+    "MAR": 2149,
+    "ESP": 2081,
+    "ITA": 2089,
+    "BRA": 2050,
+    "CRO": 2113,
+    "ENG": 2072,
+    "MUN": 66,
+    "ARS": 57,
+    "MCI": 65,
+    "LIV": 64,
+    "CHE": 61,
+    "TOT": 73,
+    "NEW": 67,
+    "AVL": 58,
+    "FUL": 63,
+    "BHA": 397,
+    "WHU": 563,
+    "CRY": 354,
+    "BOU": 1044,
+    "EVE": 62,
+    "BRE": 389,
+    "NFO": 351,
+    "LEI": 338,
+    "WOL": 76,
+    "SOU": 340,
+    "IPS": 349
 }
-
-# Map mock IDs to real API-Sports Premier League fixture IDs
-MOCK_MATCH_TO_REAL_FIXTURE_ID = {
-    "M001": 1208021,
-    "M002": 1208022,
-    "M003": 1208028,
-    "M004": 1208023,
-    "M005": 1208024,
-    "M006": 1208025
-}
-
-def get_stat_value_py(statistics, type_name):
-    if not statistics or not isinstance(statistics, list):
-        return {"home": 0, "away": 0}
-    home_stats = statistics[0].get("statistics", []) if len(statistics) > 0 else []
-    away_stats = statistics[1].get("statistics", []) if len(statistics) > 1 else []
-    
-    home_val = next((s.get("value") for s in home_stats if s.get("type") == type_name), 0)
-    away_val = next((s.get("value") for s in away_stats if s.get("type") == type_name), 0)
-    
-    def parse_val(v):
-        if isinstance(v, str):
-            if "%" in v:
-                v = v.replace("%", "")
-            try:
-                return int(v)
-            except ValueError:
-                return 0
-        if v is None:
-            return 0
-        return int(v)
-        
-    return {"home": parse_val(home_val), "away": parse_val(away_val)}
 
 def fetch_real_match_stats(match_id: str):
-    api_key = os.getenv("API_SPORTS_API_KEY")
-    fixture_id = MOCK_MATCH_TO_REAL_FIXTURE_ID.get(match_id)
-    if not fixture_id:
+    api_key = os.getenv("FOOTBALL_DATA_API_KEY")
+    try:
+        fd_match_id = int(match_id)
+    except ValueError:
+        fd_match_id = None
+
+    if fd_match_id and api_key:
         try:
-            fixture_id = int(match_id)
-        except ValueError:
-            fixture_id = None
-            
-    if fixture_id and api_key:
-        try:
-            url = f"https://v3.football.api-sports.io/fixtures?id={fixture_id}"
-            headers = {"x-apisports-key": api_key}
+            url = f"https://api.football-data.org/v4/matches/{fd_match_id}"
+            headers = {"X-Auth-Token": api_key}
             r = requests.get(url, headers=headers, timeout=5)
             if r.status_code == 200:
                 data = r.json()
-                fixture = data.get("response", [])[0] if data.get("response") else None
-                if fixture:
-                    stats = fixture.get("statistics", [])
-                    return {
-                        "match_id": match_id,
-                        "home_team": {
-                            "id": str(fixture["teams"]["home"]["id"]),
-                            "name": fixture["teams"]["home"]["name"],
-                            "code": fixture["teams"]["home"]["name"][:3].upper()
-                        },
-                        "away_team": {
-                            "id": str(fixture["teams"]["away"]["id"]),
-                            "name": fixture["teams"]["away"]["name"],
-                            "code": fixture["teams"]["away"]["name"][:3].upper()
-                        },
-                        "status": fixture["fixture"]["status"].get("long", "Scheduled"),
-                        "score": {
-                            "home": fixture["goals"].get("home") if fixture["goals"].get("home") is not None else 0,
-                            "away": fixture["goals"].get("away") if fixture["goals"].get("away") is not None else 0
-                        },
-                        "stats": {
-                            "possession": get_stat_value_py(stats, "Ball Possession"),
-                            "shots": get_stat_value_py(stats, "Total Shots"),
-                            "shots_on_target": get_stat_value_py(stats, "Shots on Target"),
-                            "passes": get_stat_value_py(stats, "Total Passes"),
-                            "pass_accuracy": get_stat_value_py(stats, "Passes %"),
-                            "fouls": get_stat_value_py(stats, "Fouls"),
-                            "corners": get_stat_value_py(stats, "Corner Kicks"),
-                            "saves": get_stat_value_py(stats, "Goalkeeper Saves")
-                        }
+                m = data
+                home = m.get("homeTeam", {})
+                away = m.get("awayTeam", {})
+                score = m.get("score", {})
+                ft = score.get("fullTime", {}) or {}
+                status = m.get("status", "SCHEDULED")
+                status_map = {
+                    "FINISHED": "Finished", "SCHEDULED": "Scheduled",
+                    "LIVE": "Live", "IN_PLAY": "Live", "PAUSED": "Live",
+                    "AWARDED": "Finished", "CANCELED": "Cancelled",
+                    "POSTPONED": "Postponed", "SUSPENDED": "Suspended"
+                }
+                return {
+                    "match_id": match_id,
+                    "home_team": {
+                        "id": str(home.get("id", "")),
+                        "name": home.get("name", ""),
+                        "code": home.get("tla", home.get("name", "")[:3].upper()),
+                        "flag": _flag_for_country(home.get("name", "")),
+                    },
+                    "away_team": {
+                        "id": str(away.get("id", "")),
+                        "name": away.get("name", ""),
+                        "code": away.get("tla", away.get("name", "")[:3].upper()),
+                        "flag": _flag_for_country(away.get("name", "")),
+                    },
+                    "status": status_map.get(status, status),
+                    "score": {
+                        "home": ft.get("home") if ft.get("home") is not None else 0,
+                        "away": ft.get("away") if ft.get("away") is not None else 0
+                    },
+                    "date": m.get("utcDate", ""),
+                    "stage": m.get("stage", ""),
+                    "group": m.get("group", ""),
+                    "stats": {
+                        "possession": {"home": 0, "away": 0},
+                        "shots": {"home": 0, "away": 0},
+                        "shots_on_target": {"home": 0, "away": 0},
+                        "passes": {"home": 0, "away": 0},
+                        "pass_accuracy": {"home": 0, "away": 0},
+                        "fouls": {"home": 0, "away": 0},
+                        "corners": {"home": 0, "away": 0},
+                        "saves": {"home": 0, "away": 0}
                     }
+                }
         except Exception as e:
             print("Error fetching real match stats in python-service:", e)
-            
+
     return matches_db.get(match_id) or matches_db.get("M001")
 
 def fetch_real_team_form(team_code: str):
-    api_key = os.getenv("API_SPORTS_API_KEY")
-    team_id = API_SPORTS_TEAM_IDS.get(team_code.upper())
+    api_key = os.getenv("FOOTBALL_DATA_API_KEY")
+    team_id = FOOTBALL_DATA_TEAM_IDS.get(team_code.upper())
     if not team_id:
-        for k, v in API_SPORTS_TEAM_IDS.items():
+        for k, v in FOOTBALL_DATA_TEAM_IDS.items():
             if team_code.lower() in k.lower() or k.lower() in team_code.lower():
                 team_id = v
                 break
-                
+
     if team_id and api_key:
         try:
-            url = f"https://v3.football.api-sports.io/fixtures?team={team_id}&season=2024"
-            headers = {"x-apisports-key": api_key}
+            url = f"https://api.football-data.org/v4/teams/{team_id}/matches?status=FINISHED&limit=5"
+            headers = {"X-Auth-Token": api_key}
             r = requests.get(url, headers=headers, timeout=5)
             if r.status_code == 200:
                 data = r.json()
-                response = data.get("response", [])
-                completed = [f for f in response if f.get("fixture", {}).get("status", {}).get("short") in ["FT", "AET", "PEN"]]
-                completed.sort(key=lambda x: x.get("fixture", {}).get("timestamp", 0), reverse=True)
+                matches = data.get("matches", [])
+                completed = [m for m in matches if m.get("status") == "FINISHED"]
+                completed.sort(key=lambda x: x.get("utcDate", ""), reverse=True)
                 recent = completed[:5]
                 if recent:
                     form = ""
-                    for f in recent:
-                        is_home = f["teams"]["home"]["id"] == team_id
-                        team_score = f["goals"]["home"] if is_home else f["goals"]["away"]
-                        opp_score = f["goals"]["away"] if is_home else f["goals"]["home"]
+                    for m in recent:
+                        is_home = m["homeTeam"]["id"] == team_id
+                        ft = m.get("score", {}).get("fullTime", {}) or {}
+                        team_score = ft.get("home") if is_home else ft.get("away")
+                        opp_score = ft.get("away") if is_home else ft.get("home")
                         if team_score is None or opp_score is None:
                             continue
                         if team_score > opp_score:
@@ -468,7 +445,7 @@ def fetch_real_team_form(team_code: str):
                     return f"Form: {form}. Dynamic recent statistics calculated from last {len(recent)} fixtures."
         except Exception as e:
             print("Error fetching real team form in python-service:", e)
-            
+
     return team_forms_db.get(team_code.upper()) or "Form: WDLWW. Fallback metrics loaded."
 
 class HealthResponse(BaseModel):
@@ -498,24 +475,17 @@ async def reload_model():
 @app.get("/players")
 async def get_players():
     """Returns all players with their cluster allocations and PCA coordinates"""
-    if "df" not in processed_data:
-        try:
-            process_clustering()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Data not initialized: {e}")
-            
-    df = processed_data["df"]
-    return df.to_dict(orient="records")
+    ensure_data()
 
-# Gated by verify_x402_payment
-@app.get("/cluster/player/{player_id}", dependencies=[Depends(verify_x402_payment)])
+    df = processed_data["df"]
+    df = df.fillna("")
+    records = json.loads(df.to_json(orient="records"))
+    return records
+
+@app.get("/cluster/player/{player_id}")
 async def get_player_cluster(player_id: str):
-    """Returns cluster archetype and top 5 similar players for a specific player ID (Paid)"""
-    if "df" not in processed_data:
-        try:
-            process_clustering()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Data not initialized: {e}")
+    """Returns cluster archetype and top 5 similar players for a specific player ID"""
+    ensure_data()
 
     df = processed_data["df"]
     X_scaled = processed_data["X_scaled"]
@@ -545,6 +515,10 @@ async def get_player_cluster(player_id: str):
     return {
         "player": player_data,
         "silhouette_score": processed_data["silhouette_score"],
+        "model": {
+            "k": processed_data.get("best_k", 5),
+            "features": list(processed_data.get("features", [])),
+        },
         "similar_players": [
             {
                 "player_id": p["player_id"],
@@ -560,10 +534,9 @@ async def get_player_cluster(player_id: str):
         ]
     }
 
-# Paid AI Outcome Prediction (0.05 USDC)
-@app.get("/predict/match/{match_id}", dependencies=[Depends(verify_x402_payment)])
+@app.get("/predict/match/{match_id}")
 async def get_match_prediction(match_id: str):
-    """Generates an AI match outcome prediction (Paid)"""
+    """Generates an AI match outcome prediction"""
     match = fetch_real_match_stats(match_id)
     if not match:
         raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
@@ -595,7 +568,7 @@ async def get_match_prediction(match_id: str):
     
     # Prompt for AI
     prompt = f"""
-    You are FULL BACK, a premium sports analyst. Generate a highly detailed, professional match outcome prediction for this upcoming match:
+    You are FULL BACK, a sports analyst. Generate a highly detailed, professional match outcome prediction for this upcoming match:
     Matchup: {home} vs {away}
     Team Form / Telemetry:
     - {home}: {home_form}
@@ -647,10 +620,9 @@ The form guide gives a slight advantage to the home side, though cup ties are hi
         "prediction_analysis": ai_response
     }
 
-# Paid AI Tactical Breakdown (0.10 USDC)
-@app.get("/tactical/match/{match_id}", dependencies=[Depends(verify_x402_payment)])
+@app.get("/tactical/match/{match_id}")
 async def get_tactical_breakdown(match_id: str):
-    """Generates an AI tactical match breakdown (Paid)"""
+    """Generates an AI tactical match breakdown"""
     match = fetch_real_match_stats(match_id)
     if not match:
         raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
@@ -662,7 +634,7 @@ async def get_tactical_breakdown(match_id: str):
     
     # Prompt for AI
     prompt = f"""
-    You are FULL BACK, a premium tactical match analyst. Generate a thorough, professional post-match tactical breakdown for:
+    You are FULL BACK, a tactical match analyst. Generate a thorough, professional post-match tactical breakdown for:
     Match: {home} vs {away}
     Final Score: {score_str}
     
@@ -706,11 +678,7 @@ The game changed in the second half when substitutions altered the width of atta
 @app.get("/cluster/stats")
 async def get_cluster_stats():
     """Returns summary statistics for the clustering model"""
-    if "df" not in processed_data:
-        try:
-            process_clustering()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Data not initialized: {e}")
+    ensure_data()
 
     df = processed_data["df"]
     archetypes = processed_data["archetypes"]
@@ -735,9 +703,9 @@ async def get_cluster_stats():
         "clusters": stats
     }
 
-@app.get("/highlights/match/{match_id}", dependencies=[Depends(verify_x402_payment)])
+@app.get("/highlights/match/{match_id}")
 async def get_match_highlights(match_id: str):
-    """Generates and returns audio-loudness-based match highlights (gated by x402)"""
+    """Generates and returns audio-loudness-based match highlights"""
     from highlights import analyze_and_extract_highlights
     video_path = f"public/{match_id}.mp4"
     if not os.path.exists(video_path):
@@ -750,9 +718,9 @@ async def get_match_highlights(match_id: str):
         "highlights": highlights
     }
 
-@app.get("/generate_highlights/{video_id}", dependencies=[Depends(verify_x402_payment)])
+@app.get("/generate_highlights/{video_id}")
 async def generate_highlights(video_id: str):
-    """Generates highlights for a specific video ID (gated by x402)"""
+    """Generates highlights for a specific video ID"""
     from highlights import analyze_and_extract_highlights
     video_path = f"public/{video_id}.mp4"
     if not os.path.exists(video_path):
@@ -768,55 +736,83 @@ async def generate_highlights(video_id: str):
 # Free endpoints for dashboard
 @app.get("/standings/{group}")
 async def get_standings(group: str):
-    """Get group standings"""
+    """Get group standings — fetches live from football-data.org WC competition"""
     group = group.upper()
-    if group not in standings_db:
-        raise HTTPException(status_code=404, detail=f"Group {group} not found. Available groups: {list(standings_db.keys())}")
-    return standings_db[group]
+    try:
+        raw = get_wc_standings()
+        if "error" not in raw:
+            result = extract_standings_for_group(raw, group)
+            if result:
+                return result
+            all_groups = extract_all_standings_by_group(raw)
+            if group in all_groups:
+                return all_groups[group]
+        print(f"WC API returned error for standings, using fallback: {raw.get('error', 'unknown')}")
+    except Exception as e:
+        print(f"Error fetching WC standings: {e}")
+
+    if group in standings_db:
+        return standings_db[group]
+    raise HTTPException(status_code=404, detail=f"Group {group} not found")
 
 @app.get("/matches")
 async def get_all_matches():
-    """Get all matches (fixtures)"""
+    """Get all matches (fixtures) — fetches live from football-data.org WC competition"""
+    try:
+        raw = get_wc_matches()
+        if "error" not in raw:
+            extracted = extract_matches(raw)
+            if extracted:
+                return extracted
+        print(f"WC API error for matches, using fallback: {raw.get('error', 'unknown')}")
+    except Exception as e:
+        print(f"Error fetching WC matches: {e}")
     return list(matches_db.values())
 
 @app.get("/matches/{match_id}")
 async def get_match(match_id: str):
-    """Get single match stats"""
+    """Get single match by football-data.org match ID"""
     match = fetch_real_match_stats(match_id)
-    if not match:
-        raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
-    return match
+    if match:
+        return match
+
+    try:
+        raw = get_wc_matches()
+        if "error" not in raw:
+            extracted = extract_matches(raw)
+            for m in extracted:
+                if m["match_id"] == match_id:
+                    return m
+    except Exception as e:
+        print(f"Error looking up match {match_id}: {e}")
+
+    raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
 
 @app.get("/team-form/{team_id}")
 async def get_team_form(team_id: str):
-    """Get team form and recent matches"""
+    """Get team form and recent matches — fetches from football-data.org"""
     team_id = team_id.upper()
+
+    fd_id = WC_TEAM_IDS.get(team_id)
+    if fd_id:
+        try:
+            raw = get_team_matches(fd_id)
+            if "error" not in raw:
+                form = extract_team_form(raw, fd_id)
+                if form:
+                    return form
+                print(f"Team {team_id} (FD ID {fd_id}): no form data found")
+        except Exception as e:
+            print(f"Error fetching form for {team_id}: {e}")
+
     if team_id in team_forms_db:
         return team_forms_db[team_id]
-    
-    # Try to fetch real team form
-    real_form = fetch_real_team_form(team_id)
-    if real_form != "Form: WDLWW. Fallback metrics loaded.":
-        return {
-            "team_id": team_id,
-            "team_name": team_id,
-            "form": real_form.split("Form: ")[1].split(".")[0] if "Form: " in real_form else "WDLWW",
-            "recent_matches": [],
-            "goals_scored": 0,
-            "goals_conceded": 0,
-            "clean_sheets": 0
-        }
-    
     raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
 
 @app.get("/player-stats")
 async def get_player_stats():
     """Get top scorers and assist leaders"""
-    if "df" not in processed_data:
-        try:
-            process_clustering()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Data not initialized: {e}")
+    ensure_data()
     
     df = processed_data["df"]
     top_scorers = df.sort_values("goals", ascending=False).head(10).to_dict(orient="records")
@@ -828,4 +824,4 @@ async def get_player_stats():
     }
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
