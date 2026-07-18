@@ -61,15 +61,15 @@ A single MCP server sits at the center. It exposes tools an AI agent (or a simpl
 
 1. **MCP is the actual product architecture** (not a wrapper bolted on at the end), and Agent Skills make the work reusable by other builders.
 2. **The dashboard is genuinely useful** — anyone can evaluate usability on the spot.
-3. **Data science with a clear head, not scope creep.** Player clustering is fully built. Highlights is built. Formation tracking is explicitly a bonus screenshot, not a promise.
+3. **Data science with a clear head, not scope creep.** Player clustering is fully built. Highlights is built. Formation tracking is explicitly a bonus screenshot, not a promise
 
 ---
 
 ## Two user flows
 
-**Fan flow:** open the dashboard → check today's fixtures and form → ask the chat widget a tactical question → get a genuinely useful, AI-written answer.
+**Fan flow:** open the dashboard → check today's fixtures and form → ask the chat widget a tactical question → get a genuinely useful, AI-written answer
 
-**Developer flow:** `npx skills add` the `worldcup-analyst` skill into their own agent → their agent now knows how to query FULL BACK's MCP server.
+**Developer flow:** `npx skills add` the `worldcup-analyst` skill into their own agent → their agent now knows how to query FULL BACK's MCP server
 
 ---
 
