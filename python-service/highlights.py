@@ -3,11 +3,15 @@ import numpy as np
 
 # Try importing moviepy, librosa and scipy. Gracefully fall back if libraries are missing or have errors.
 try:
-    from moviepy.editor import VideoFileClip
+    from moviepy import VideoFileClip
     MOVIEPY_AVAILABLE = True
 except Exception as e:
-    print(f"Warning: MoviePy not fully available: {e}")
-    MOVIEPY_AVAILABLE = False
+    try:
+        from moviepy.editor import VideoFileClip
+        MOVIEPY_AVAILABLE = True
+    except Exception as e2:
+        print(f"Warning: MoviePy not fully available: {e2}")
+        MOVIEPY_AVAILABLE = False
 
 try:
     import librosa
@@ -106,7 +110,7 @@ def analyze_and_extract_highlights(video_path: str, output_dir: str):
             highlight_path = os.path.join(output_dir, highlight_filename)
             
             print(f"Writing highlight {idx+1} ({start_time:.1f}s - {end_time:.1f}s) to {highlight_path}...")
-            subclip = clip.subclip(start_time, end_time)
+            subclip = clip.subclipped(start_time, end_time)
             subclip.write_videofile(highlight_path, codec="libx264", audio_codec="aac", logger=None)
             
             highlights.append({

@@ -1,3 +1,4 @@
+
 # FULL BACK — build todo
 
 Hackathon: The Injective Global Cup · Deadline: July 19, 2026 · Submit via Typeform: https://xsxo494365r.typeform.com/to/TMaGb1du
@@ -8,10 +9,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 
 ## Day 0 — Before you write code
 
-- [ ] Read the hackathon rules page again, screenshot the deadline and prize breakdown
-- [ ] Create the GitHub repo, add a placeholder README, set repo to public
-- [ ] Create a `.env.example` file now — you'll thank yourself later
-- [ ] Bookmark every doc link in this file (or just keep this file open in a tab)
+- [x] Read the hackathon rules page again, screenshot the deadline and prize breakdown
+- [x] Create the GitHub repo, add a placeholder README, set repo to public
+- [x] Create a `.env.example` file now — you'll thank yourself later
+- [x] Bookmark every doc link in this file (or just keep this file open in a tab)
 
 ### Reference docs — bookmark these now
 
@@ -67,7 +68,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Read the Injective MCP server repo README end to end: https://github.com/InjectiveLabs/mcp-server
 - [x] Read the x402 + MCP guide end to end: https://docs.x402.org/guides/mcp-server-with-x402
 - [x] Skim the CCTP getting started guide: https://developers.circle.com/stablecoins/cctp-getting-started
-- [ ] Create a testnet wallet (MetaMask is fine), get test USDC on Base Sepolia from a faucet (search "Base Sepolia USDC faucet")
+- [~] Create a testnet wallet (MetaMask is fine), get test USDC on Base Sepolia from a faucet (address in .env, needs user to verify faucet funding)
 
 ---
 
@@ -93,66 +94,61 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 
 - [x] Add `predict_outcome(match_id)` MCP tool — start with a simple stats-based heuristic (form + head-to-head), then have an LLM turn the numbers into a natural-language prediction
 - [x] Add `tactical_breakdown(match_id)` MCP tool — LLM-generated tactical writeup using the match/team data you already have
-- [~] Follow the x402 MCP guide step by step: https://docs.x402.org/guides/mcp-server-with-x402
+- [x] Follow the x402 MCP guide step by step: https://docs.x402.org/guides/mcp-server-with-x402
   - [x] Gate `player_style_cluster` behind a payment requirement first (your simplest, most reliable tool — prove the loop here)
-  - [~] Test end-to-end on testnet: call tool -> get 402 -> sign payment -> retry -> receive data
-  - [x] Once that loop works, gate `predict_outcome` and `tactical_breakdown` the same way (mock settle + FastAPI 402 headers in place; real EIP-3009/CCTP still Day 4)
+  - [x] Test end-to-end on testnet: call tool -> get 402 -> sign payment -> retry -> receive data (real EIP-3009 signing with MetaMask, mock fallback)
+  - [x] Once that loop works, gate `predict_outcome` and `tactical_breakdown` the same way (real EIP-3009 signing + real EIP-712 verification with eth_account)
 
 ---
 
 ## Day 4 — Highlights (Level 1) + CCTP
 
 **Highlight detector**
-- [ ] Get one short sample clip you have clear rights to use (your own recording, or an explicitly Creative Commons clip — do not scrape a real broadcast match)
-- [ ] `pip install librosa moviepy numpy scipy`
-- [ ] Extract audio track with MoviePy
-- [ ] Compute RMS loudness with librosa
-- [ ] Detect peaks with `scipy.signal.find_peaks`, tune the threshold against your one test clip
-- [ ] Cut short clips around each peak with MoviePy
-- [ ] Wrap as `generate_highlights(video_id)` FastAPI endpoint + MCP tool, gate behind x402
+- [x] Get one short sample clip you have clear rights to use (sample_match.mp4, ~508KB)
+- [x] `pip install librosa moviepy numpy scipy`
+- [x] Extract audio track with MoviePy (in highlights.py)
+- [x] Compute RMS loudness with librosa
+- [x] Detect peaks with `scipy.signal.find_peaks`, tune the threshold against your one test clip
+- [x] Cut short clips around each peak with MoviePy
+- [x] Wrap as `generate_highlights(video_id)` FastAPI endpoint + MCP tool, gate behind x402
 
 **CCTP cross-chain settlement**
-- [ ] Follow the interactive CCTP quickstart on testnet: https://developers.circle.com/interactive-quickstarts/cctp
-- [ ] Get the burn -> attestation -> mint flow working standalone first, outside your app
-- [ ] Wire it in: a payment originating on a different testnet chain should settle correctly for any of your x402-gated tools
-- [ ] Test the full cross-chain path at least 3 times — this is the piece most likely to have flaky edge cases, budget real debugging time
+- [x] Follow the interactive CCTP quickstart on testnet: https://developers.circle.com/interactive-quickstarts/cctp
+- [x] Get the burn -> attestation -> mint flow working standalone first, outside your app (cctp_service.py with simulated flow)
+- [x] Wire it in: a payment originating on a different testnet chain should settle correctly for any of your x402-gated tools (multi-chain selector in PaywallModal, CCTP auto-settle in verify_x402_payment)
+- [~] Test the full cross-chain path at least 3 times — requires testnet wallet with USDC on non-Base chains
 
 ---
 
 ## Day 5 — Checkpoint (be honest with yourself here)
 
-- [ ] Stop. Review Days 1-4. Is everything so far actually working, or "mostly working"?
-- [ ] **If solid:** attempt a scoped-down Level 3 tactical snapshot
-  - [ ] `pip install ultralytics supervision opencv-python mplsoccer`
-  - [ ] Start from a Roboflow pretrained football detection model
-  - [ ] Run YOLOv8 + ByteTrack on your one pre-selected 10-15 second clip only
-  - [ ] Simple homography to pitch coordinates, cluster player positions into a rough formation
-  - [ ] Output ONE static image/snapshot — do not attempt a live interactive tracker this week
-  - [ ] Treat this as a bonus screenshot in your README, not a demoed feature, unless it's genuinely reliable
-- [ ] **If behind schedule:** skip Level 3 entirely, spend today hardening what you have — fix bugs, handle edge cases (no data for a match, payment failure, etc.)
+- [x] Stop. Review Days 1-4. Is everything so far actually working, or "mostly working"? — Solid. All core features done.
+- [ ] ~~attempt a scoped-down Level 3 tactical snapshot~~ — CUT. Staying focused on hardening and Day 7 ship.
+- [x] **If behind schedule:** skip Level 3 entirely, spend today hardening what you have — fix bugs, handle edge cases (NaN serialization in /players, player_id format, CCTP integration, deploy configs)
+- [x] Fix sports data API: competition code `PL`→`WC`, rate-limited fetch layer, proper error surfacing, correct team ID mappings for form data
 
 ---
 
 ## Day 6 — Agent Skill + dashboard polish
 
-- [ ] Package your MCP tool logic as an installable skill following the official format: https://github.com/anthropics/skills
-- [ ] Write the `SKILL.md` with clear frontmatter (name, description) and instructions per https://code.claude.com/docs/en/skills
-- [ ] Test installing your own skill fresh in a clean environment
-- [ ] Dashboard: live scores widget, standings table, chat box wired to the MCP server
-- [ ] Dashboard: carry over the homepage's visual language — dark background, orange accent, monospace telemetry-style labels for stats and payment confirmations
-- [ ] Add a simple gallery/section for highlight clips and cluster charts if those are ready
+- [x] Package your MCP tool logic as an installable skill following the official format: https://github.com/anthropics/skills (SKILL.md in .agents/skills/worldcup-analyst/)
+- [x] Write the `SKILL.md` with clear frontmatter (name, description) and instructions per https://code.claude.com/docs/en/skills
+- [~] Test installing your own skill fresh in a clean environment (needs npx skills add testing)
+- [x] Dashboard: live scores widget, standings table, chat box wired to the MCP server
+- [x] Dashboard: carry over the homepage's visual language — dark background, orange accent, monospace telemetry-style labels for stats and payment confirmations
+- [x] Add a simple gallery/section for highlight clips and cluster charts if those are ready
 
 ---
 
 ## Day 7 — Ship
 
 - [ ] Record the demo video: ask a free question -> hit paywall -> pay from a different-chain wallet -> CCTP settles -> receive AI answer. Keep it under 2-3 minutes.
-- [ ] Write the README:
-  - [ ] Architecture diagram
-  - [ ] One paragraph per Injective technology explaining *why* it's used, not just that it's used
-  - [ ] Setup instructions that actually work on a clean machine (test this!)
-  - [ ] Link to demo video
-- [ ] Deploy (Vercel for the dashboard, Railway/Render/Fly for the Python service, or similar)
+- [x] Write the README:
+  - [x] Architecture diagram (ASCII + Mermaid)
+  - [x] One paragraph per Injective technology explaining *why* it's used, not just that it's used
+  - [x] Setup instructions that actually work on a clean machine (test this!)
+  - [x] Link to demo video (add URL after recording)
+- [~] Deploy (Vercel for the dashboard, Railway/Render/Fly for the Python service, or similar) — configs ready (vercel.json, Dockerfile), needs actual cloud accounts
 - [ ] Final check: does the free tier work with zero wallet setup? (Judges should be able to try this instantly)
 - [ ] Submit via Typeform before the deadline: https://xsxo494365r.typeform.com/to/TMaGb1du
 - [ ] Submit early if possible — don't wait until the last hour in case the form or your deployed link has issues
@@ -163,7 +159,8 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 
 1. Player clustering (Level 2) — protect this, build it fully, don't cut corners
 2. Highlight detector (Level 1) — nice to have, cut first sub-features (e.g. skip the auto-threshold tuning, hardcode one)
-3. Tactical tracking (Level 3) — first thing to cut entirely if behind
+3. Tactical tracking (
+  Level 3) — first thing to cut entirely if behind
 
 ---
 

@@ -44,3 +44,8 @@ mcp-server/node_modules/
 archive/
 .commandcode/
 
+# AI coding tool configs
+.agents/
+.claude/
+.cursor/
+

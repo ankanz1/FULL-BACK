@@ -1,0 +1,6 @@
+@echo off
+echo Killing existing Python on port 8000...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8000') do taskkill /F /PID %%a >nul 2>&1
+echo Starting FULL BACK Python Service...
+start "FullBack-Service" "C:\Users\ankan\anaconda3\python.exe" "C:\Users\ankan\OneDrive\Projects\FullBack\python-service\main.py"
+echo Service started in new window.

@@ -1,0 +1,11 @@
+import sys
+print(f"Python: {sys.executable}")
+import fastapi
+print(f"fastapi: {fastapi.__version__}")
+import uvicorn
+print(f"uvicorn: {uvicorn.__version__}")
+import pandas
+print(f"pandas: {pandas.__version__}")
+import sklearn
+print(f"sklearn: {sklearn.__version__}")
+print("ALL OK")

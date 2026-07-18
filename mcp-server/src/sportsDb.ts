@@ -79,35 +79,40 @@ export interface GroupStanding {
   points: number;
 }
 
-// API Sports Team ID Map
-const apiSportsTeamIds: Record<string, number> = {
-  "USA": 33,
-  "COL": 42,
-  "GER": 50,
-  "JPN": 47,
-  "ARG": 40,
-  "FRA": 49,
-  "MAR": 34,
-  "ESP": 35,
-  "ITA": 45,
-  "BRA": 66,
-  "CRO": 36,
-  "MUN": 33,
-  "ARS": 42,
-  "MCI": 50,
-  "LIV": 40,
-  "CHE": 49,
-  "TOT": 47
-};
-
-// Map mock IDs to real API-Sports Premier League fixture IDs
-const mockMatchToRealFixtureId: Record<string, number> = {
-  "M001": 1208021,
-  "M002": 1208022,
-  "M003": 1208028,
-  "M004": 1208023,
-  "M005": 1208024,
-  "M006": 1208025
+// Football Data.org Team ID Map
+const footballDataTeamIds: Record<string, number> = {
+  "USA": 2167,
+  "COL": 2183,
+  "GER": 2083,
+  "JPN": 2102,
+  "ARG": 2028,
+  "FRA": 2061,
+  "MAR": 2149,
+  "ESP": 2081,
+  "ITA": 2089,
+  "BRA": 2050,
+  "CRO": 2113,
+  "ENG": 2072,
+  "MUN": 66,
+  "ARS": 57,
+  "MCI": 65,
+  "LIV": 64,
+  "CHE": 61,
+  "TOT": 73,
+  "NEW": 67,
+  "AVL": 58,
+  "FUL": 63,
+  "BHA": 397,
+  "WHU": 563,
+  "CRY": 354,
+  "BOU": 1044,
+  "EVE": 62,
+  "BRE": 389,
+  "NFO": 351,
+  "LEI": 338,
+  "WOL": 76,
+  "SOU": 340,
+  "IPS": 349
 };
 
 // Helper to get team flags
@@ -281,31 +286,10 @@ const fallbackTeamForms: Record<string, TeamForm> = {
   }
 };
 
-// Helper to fetch stat value safely
-function getStatValue(statistics: any[], typeName: string): { home: number; away: number } {
-  const homeStats = statistics?.[0]?.statistics || [];
-  const awayStats = statistics?.[1]?.statistics || [];
-  
-  const homeVal = homeStats.find((s: any) => s.type === typeName)?.value ?? 0;
-  const awayVal = awayStats.find((s: any) => s.type === typeName)?.value ?? 0;
-  
-  const parseVal = (v: any) => {
-    if (typeof v === "string") {
-      return parseInt(v.replace("%", ""), 10) || 0;
-    }
-    return Number(v) || 0;
-  };
-  
-  return {
-    home: parseVal(homeVal),
-    away: parseVal(awayVal)
-  };
-}
-
 // Helper for dynamic team name lookup
 function findTeamIdByName(name: string): number | undefined {
   const norm = name.toLowerCase();
-  for (const [key, id] of Object.entries(apiSportsTeamIds)) {
+  for (const [key, id] of Object.entries(footballDataTeamIds)) {
     if (norm.includes(key.toLowerCase()) || key.toLowerCase().includes(norm)) {
       return id;
     }
@@ -316,110 +300,60 @@ function findTeamIdByName(name: string): number | undefined {
 export const sportsDb = {
   async getMatchStats(matchId: string): Promise<MatchStats | undefined> {
     try {
-      let apiFixtureId = mockMatchToRealFixtureId[matchId];
-      if (!apiFixtureId) {
-        const num = parseInt(matchId, 10);
-        if (!isNaN(num)) apiFixtureId = num;
-      }
+      const fdMatchId = parseInt(matchId, 10);
+      if (!isNaN(fdMatchId) && process.env.FOOTBALL_DATA_API_KEY) {
+        const headers = { "X-Auth-Token": process.env.FOOTBALL_DATA_API_KEY };
+        const res = await fetch(`https://api.football-data.org/v4/matches/${fdMatchId}`, { headers });
 
-      if (apiFixtureId && process.env.API_SPORTS_API_KEY) {
-        const headers = { "x-apisports-key": process.env.API_SPORTS_API_KEY };
-        const res = await fetch(`https://v3.football.api-sports.io/fixtures?id=${apiFixtureId}`, {
-          headers
-        });
-        
         if (res.ok) {
           const data = (await res.json()) as any;
-          const fixture = data.response?.[0];
-          if (fixture) {
-            // Fixtures?id= sometimes omits rich payloads — fill gaps from dedicated endpoints
-            let statistics = fixture.statistics || [];
-            let events = fixture.events || [];
-            let lineups = fixture.lineups || [];
+          const m = data.match || {};
+          const home = m.homeTeam || {};
+          const away = m.awayTeam || {};
+          const score = m.score || {};
+          const ft = score.fullTime || {};
+          const statusMap: Record<string, string> = {
+            FINISHED: "Finished", SCHEDULED: "Scheduled",
+            LIVE: "Live", IN_PLAY: "Live", PAUSED: "Live",
+            AWARDED: "Finished", CANCELED: "Cancelled",
+            POSTPONED: "Postponed", SUSPENDED: "Suspended"
+          };
 
-            if (!statistics.length || !events.length || !lineups.length) {
-              const [statsRes, eventsRes, lineupsRes] = await Promise.all([
-                !statistics.length
-                  ? fetch(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${apiFixtureId}`, { headers })
-                  : null,
-                !events.length
-                  ? fetch(`https://v3.football.api-sports.io/fixtures/events?fixture=${apiFixtureId}`, { headers })
-                  : null,
-                !lineups.length
-                  ? fetch(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${apiFixtureId}`, { headers })
-                  : null,
-              ]);
-
-              if (statsRes?.ok) {
-                const statsPayload = (await statsRes.json()) as any;
-                statistics = statsPayload.response || [];
-              }
-              if (eventsRes?.ok) {
-                const eventsPayload = (await eventsRes.json()) as any;
-                events = eventsPayload.response || [];
-              }
-              if (lineupsRes?.ok) {
-                const lineupsPayload = (await lineupsRes.json()) as any;
-                lineups = lineupsPayload.response || [];
-              }
+          return {
+            match_id: matchId,
+            home_team: {
+              id: String(home.id || ""),
+              name: home.name || "",
+              code: home.tla || (home.name || "").substring(0, 3).toUpperCase(),
+              flag: getTeamFlag(home.name || "")
+            },
+            away_team: {
+              id: String(away.id || ""),
+              name: away.name || "",
+              code: away.tla || (away.name || "").substring(0, 3).toUpperCase(),
+              flag: getTeamFlag(away.name || "")
+            },
+            status: statusMap[m.status] || m.status || "Scheduled",
+            score: {
+              home: ft.home ?? 0,
+              away: ft.away ?? 0
+            },
+            events: [],
+            stats: {
+              possession: { home: 0, away: 0 },
+              shots: { home: 0, away: 0 },
+              shots_on_target: { home: 0, away: 0 },
+              passes: { home: 0, away: 0 },
+              pass_accuracy: { home: 0, away: 0 },
+              fouls: { home: 0, away: 0 },
+              corners: { home: 0, away: 0 },
+              saves: { home: 0, away: 0 }
+            },
+            lineups: {
+              home: { formation: "4-4-2", starting: [] },
+              away: { formation: "4-4-2", starting: [] }
             }
-
-            return {
-              match_id: matchId,
-              home_team: {
-                id: String(fixture.teams.home.id),
-                name: fixture.teams.home.name,
-                code: fixture.teams.home.name.substring(0, 3).toUpperCase(),
-                flag: getTeamFlag(fixture.teams.home.name)
-              },
-              away_team: {
-                id: String(fixture.teams.away.id),
-                name: fixture.teams.away.name,
-                code: fixture.teams.away.name.substring(0, 3).toUpperCase(),
-                flag: getTeamFlag(fixture.teams.away.name)
-              },
-              status: fixture.fixture.status.long || "Scheduled",
-              score: {
-                home: fixture.goals.home ?? 0,
-                away: fixture.goals.away ?? 0
-              },
-              events: events.map((e: any) => ({
-                time: e.time?.elapsed ?? 0,
-                type: e.type === "subst" ? "substitution" : String(e.type || "card").toLowerCase(),
-                detail: e.detail || "",
-                team_id: String(e.team?.id ?? ""),
-                player: e.player?.name || ""
-              })),
-              stats: {
-                possession: getStatValue(statistics, "Ball Possession"),
-                shots: getStatValue(statistics, "Total Shots"),
-                shots_on_target: getStatValue(statistics, "Shots on Target"),
-                passes: getStatValue(statistics, "Total Passes"),
-                pass_accuracy: getStatValue(statistics, "Passes %"),
-                fouls: getStatValue(statistics, "Fouls"),
-                corners: getStatValue(statistics, "Corner Kicks"),
-                saves: getStatValue(statistics, "Goalkeeper Saves")
-              },
-              lineups: {
-                home: {
-                  formation: lineups?.[0]?.formation || "4-4-2",
-                  starting: (lineups?.[0]?.startXI || []).map((p: any) => ({
-                    number: p.player.number,
-                    name: p.player.name,
-                    position: p.player.pos
-                  }))
-                },
-                away: {
-                  formation: lineups?.[1]?.formation || "4-4-2",
-                  starting: (lineups?.[1]?.startXI || []).map((p: any) => ({
-                    number: p.player.number,
-                    name: p.player.name,
-                    position: p.player.pos
-                  }))
-                }
-              }
-            };
-          }
+          };
         }
       }
     } catch (err) {
@@ -430,33 +364,43 @@ export const sportsDb = {
 
   async getTeamForm(teamId: string): Promise<TeamForm | undefined> {
     try {
-      const resolvedTeamId = apiSportsTeamIds[teamId.toUpperCase()] || findTeamIdByName(teamId);
-      if (resolvedTeamId && process.env.API_SPORTS_API_KEY) {
-        const res = await fetch(`https://v3.football.api-sports.io/fixtures?team=${resolvedTeamId}&season=2024`, {
-          headers: { "x-apisports-key": process.env.API_SPORTS_API_KEY }
+      const resolvedTeamId = footballDataTeamIds[teamId.toUpperCase()] || findTeamIdByName(teamId);
+      if (resolvedTeamId && process.env.FOOTBALL_DATA_API_KEY) {
+        const res = await fetch(`https://api.football-data.org/v4/teams/${resolvedTeamId}/matches?status=FINISHED&limit=5`, {
+          headers: { "X-Auth-Token": process.env.FOOTBALL_DATA_API_KEY }
         });
 
         if (res.ok) {
           const data = (await res.json()) as any;
-          const response = data.response || [];
-          const completed = response.filter((f: any) => ["FT", "AET", "PEN"].includes(f.fixture.status.short));
-          completed.sort((a: any, b: any) => b.fixture.timestamp - a.fixture.timestamp);
+          const matches = data.matches || [];
+          const completed = matches.filter((m: any) => m.status === "FINISHED");
+          completed.sort((a: any, b: any) => (b.utcDate || "").localeCompare(a.utcDate || ""));
           
           const recentMatches = completed.slice(0, 5);
           if (recentMatches.length > 0) {
             let form = "", goals_scored = 0, goals_conceded = 0, clean_sheets = 0;
-            const recentMapped = recentMatches.map((f: any, idx: number) => {
-              const isHome = f.teams.home.id === resolvedTeamId;
-              const teamScore = isHome ? (f.goals.home ?? 0) : (f.goals.away ?? 0);
-              const oppScore = isHome ? (f.goals.away ?? 0) : (f.goals.home ?? 0);
+            const recentMapped = recentMatches.map((m: any, idx: number) => {
+              const isHome = m.homeTeam.id === resolvedTeamId;
+              const ft = m.score?.fullTime || {};
+              const teamScore = isHome ? (ft.home ?? 0) : (ft.away ?? 0);
+              const oppScore = isHome ? (ft.away ?? 0) : (ft.home ?? 0);
               goals_scored += teamScore;
               goals_conceded += oppScore;
               if (oppScore === 0) clean_sheets++;
               let result: "W" | "D" | "L" = teamScore > oppScore ? "W" : teamScore < oppScore ? "L" : "D";
               form = result + form;
-              return { match_id: `M_REC_${teamId}_${idx}`, opponent: isHome ? f.teams.away.name : f.teams.home.name, score: `${f.goals.home}-${f.goals.away}`, result, date: f.fixture.date.substring(0, 10) };
+              return {
+                match_id: `M_REC_${teamId}_${idx}`,
+                opponent: isHome ? m.awayTeam.name : m.homeTeam.name,
+                score: `${ft.home ?? 0}-${ft.away ?? 0}`,
+                result,
+                date: (m.utcDate || "").substring(0, 10)
+              };
             });
-            return { team_id: teamId, team_name: recentMatches[0].teams.home.id === resolvedTeamId ? recentMatches[0].teams.home.name : recentMatches[0].teams.away.name, form: form || "D", recent_matches: recentMapped, goals_scored, goals_conceded, clean_sheets };
+            const teamName = recentMatches[0].homeTeam.id === resolvedTeamId
+              ? recentMatches[0].homeTeam.name
+              : recentMatches[0].awayTeam.name;
+            return { team_id: teamId, team_name: teamName, form: form || "D", recent_matches: recentMapped, goals_scored, goals_conceded, clean_sheets };
           }
         }
       }
@@ -469,24 +413,35 @@ export const sportsDb = {
   async getStandings(group: string): Promise<GroupStanding[] | undefined> {
     try {
       if (process.env.FOOTBALL_DATA_API_KEY) {
-        const res = await fetch("https://api.football-data.org/v4/competitions/PL/standings", {
+        console.error(`sportsDb: Fetching WC standings for group ${group}...`);
+        const res = await fetch("https://api.football-data.org/v4/competitions/WC/standings", {
           headers: { "X-Auth-Token": process.env.FOOTBALL_DATA_API_KEY }
         });
+        console.error(`sportsDb: WC standings -> HTTP ${res.status}`);
+        if (!res.ok) {
+          const body = await res.text();
+          console.error(`sportsDb: WC standings error body: ${body.slice(0, 300)}`);
+        }
         if (res.ok) {
           const data = (await res.json()) as any;
-          const table = data.standings?.[0]?.table || [];
-          if (table.length > 0) {
-            const mapped = table.map((row: any) => ({
-              position: row.position,
-              team: { id: String(row.team.id), name: row.team.shortName || row.team.name, code: row.team.tla || "", flag: getTeamFlag(row.team.shortName || row.team.name) },
-              played: row.playedGames, won: row.won, drawn: row.draw, lost: row.lost, goals_for: row.goalsFor, goals_against: row.goalsAgainst, points: row.points
-            }));
-            return group.toUpperCase() === "A" ? mapped.slice(0, 10) : mapped.slice(10, 20);
+          const standingsList = data.standings || [];
+          const groupUpper = group.toUpperCase();
+          for (const g of standingsList) {
+            const gName = (g.group || "").toUpperCase();
+            if (gName.includes(groupUpper)) {
+              const table = g.table || [];
+              return table.map((row: any) => ({
+                position: row.position,
+                team: { id: String(row.team.id), name: row.team.name, code: row.team.tla || "", flag: getTeamFlag(row.team.name) },
+                played: row.playedGames, won: row.won, drawn: row.draw, lost: row.lost, goals_for: row.goalsFor, goals_against: row.goalsAgainst, points: row.points
+              }));
+            }
           }
+          console.error(`sportsDb: Group ${group} not found in WC standings response`);
         }
       }
     } catch (err) {
-      console.error("sportsDb: Error fetching standings", err);
+      console.error("sportsDb: Error fetching WC standings", err);
     }
     return fallbackStandings[group.toUpperCase()] || fallbackStandings["A"];
   },
