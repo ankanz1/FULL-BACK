@@ -1,0 +1,1 @@
+Team A shows a compact, narrow shape (avg depth 4m from own goal, spread 4m × 3m). Team B is compact and narrow (avg depth 4m, spread 5m × 4m). Detection and homography are approximate — this is a qualitative illustration, not a precise formation map.

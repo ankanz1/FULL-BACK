@@ -141,6 +141,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["match_id"],
         },
       },
+      {
+        name: "tactical_snapshot",
+        description: "Generate a tactical snapshot image showing averaged player positions on a pitch from the pre-loaded Asset_Video.mp4 clip. No arguments needed.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
     ],
   };
 });
@@ -272,6 +280,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     } catch (error: any) {
       throw new Error(`Failed to cluster player: ${error.message}`);
+    }
+  }
+
+  if (name === "tactical_snapshot") {
+    try {
+      const data = await callPythonService(`/tactics/snapshot`);
+      const caption = data.caption || "Tactical snapshot generated.";
+      const imageUrl = data.image_url;
+      return {
+        content: [
+          { type: "text", text: caption },
+          { type: "text", text: JSON.stringify({ imageUrl, caption }) },
+        ],
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to generate tactical snapshot: ${error.message}`);
     }
   }
 

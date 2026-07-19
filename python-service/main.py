@@ -145,7 +145,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-import json
+import json, time, sys
 import requests
 from fastapi.staticfiles import StaticFiles
 from sports_api import (
@@ -821,6 +821,39 @@ async def get_player_stats():
     return {
         "top_scorers": top_scorers,
         "top_assists": top_assists
+    }
+
+@app.get("/tactics/snapshot")
+async def get_tactical_snapshot():
+    """Run or retrieve an existing tactical snapshot (player positions + averaged tactical image)."""
+    import subprocess
+    image_path = os.path.join(_SCRIPT_DIR, "public", "tactical_snapshot.png")
+    caption_path = os.path.join(_SCRIPT_DIR, "public", "tactical_snapshot_caption.txt")
+
+    needs_run = True
+    if os.path.exists(image_path) and os.path.exists(caption_path):
+        age = time.time() - os.path.getmtime(image_path)
+        if age < 600:
+            needs_run = False
+
+    if needs_run:
+        script = os.path.join(_SCRIPT_DIR, "tactical_snapshot.py")
+        result = subprocess.run(
+            [sys.executable or "python3", script],
+            capture_output=True, text=True, timeout=300
+        )
+        if result.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"Snapshot pipeline failed: {result.stderr[:500]}")
+
+    caption = ""
+    if os.path.exists(caption_path):
+        with open(caption_path) as f:
+            caption = f.read().strip()
+
+    return {
+        "type": "tactical_snapshot",
+        "image_url": "/public/tactical_snapshot.png",
+        "caption": caption or "Tactical snapshot generated."
     }
 
 if __name__ == "__main__":

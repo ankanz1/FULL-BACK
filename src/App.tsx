@@ -136,7 +136,7 @@ export default function App() {
   const [scatterTooltip, setScatterTooltip] = useState<{ player: Player; x: number; y: number } | null>(null);
 
   // Chat states
-  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'assistant' | 'system'; text: string }>>([
+  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'assistant' | 'system'; text: string; imageUrl?: string }>>([
     { sender: 'assistant', text: "HELLO. I AM FULL BACK. STANDING BY FOR MATCH DATA OR TACTICAL ANALYSIS INTERROGATIONS. HOW CAN I BACK YOU TODAY?" }
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -553,9 +553,12 @@ export default function App() {
       } else if (cleanText.includes('breakdown') || cleanText.includes('tactical') || cleanText.includes('tactics')) {
         toolName = 'tactical_breakdown';
         path = `/tactical/match/${selectedMatchId}`;
-      } else if (cleanText.includes('highlight') || cleanText.includes('video') || cleanText.includes('clip')) {
+      } else       if (cleanText.includes('highlight') || cleanText.includes('video') || cleanText.includes('clip')) {
         toolName = 'generate_highlights';
         path = `/highlights/match/${selectedMatchId}`;
+      } else if (cleanText.includes('snapshot') || cleanText.includes('tactical image') || cleanText.includes('position map') || (cleanText.includes('player') && cleanText.includes('position'))) {
+        toolName = 'tactical_snapshot';
+        path = `/tactics/snapshot`;
       }
 
       if (toolName) {
@@ -581,6 +584,11 @@ export default function App() {
             reply += `Tactical Breakdown:\n${result.tactical_breakdown}`;
           } else if (toolName === 'generate_highlights') {
             reply += `Highlights generation successful. Found ${result.highlights.length} events inside the audio telemetry.`;
+          } else if (toolName === 'tactical_snapshot') {
+            const caption = result.caption || "Tactical snapshot generated.";
+            const imageUrl = `${API_BASE}${result.image_url}`;
+            setMessages(prev => [...prev, { sender: 'assistant', text: caption, imageUrl }]);
+            return;
           }
 
           setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
@@ -1386,6 +1394,9 @@ export default function App() {
                       {msg.sender === 'user' ? 'USER_SHELL' : msg.sender === 'system' ? 'SYSTEM_LOG' : 'ANALYST_RESP'}
                     </div>
                     <div className="whitespace-pre-wrap font-jetbrains">{msg.text}</div>
+                    {msg.imageUrl && (
+                      <img src={msg.imageUrl} alt="Tactical Snapshot" className="mt-3 w-full rounded border border-[#2A2A28]" />
+                    )}
                   </div>
                 ))}
                 {chatLoading && (
@@ -1797,6 +1808,10 @@ export default function App() {
                     <div className="border border-neutral-900 p-3 rounded">
                       <div className="text-[#D9622B] font-bold">generate_highlights(match_id)</div>
                       <div className="text-neutral-500 mt-1">Gated: 0.08 USDC</div>
+                    </div>
+                    <div className="border border-neutral-900 p-3 rounded">
+                      <div className="text-[#D9622B] font-bold">tactical_snapshot()</div>
+                      <div className="text-neutral-500 mt-1">Free — pre-loaded clip analysis</div>
                     </div>
                   </div>
                 </div>
