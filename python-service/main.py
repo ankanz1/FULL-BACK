@@ -207,6 +207,15 @@ teams_db = {
     "ITA": {"id": "ITA", "name": "Italy", "code": "ITA", "flag": "🇮🇹"},
     "BRA": {"id": "BRA", "name": "Brazil", "code": "BRA", "flag": "🇧🇷"},
     "CRO": {"id": "CRO", "name": "Croatia", "code": "CRO", "flag": "🇭🇷"},
+    "NED": {"id": "NED", "name": "Netherlands", "code": "NED", "flag": "🇳🇱"},
+    "POR": {"id": "POR", "name": "Portugal", "code": "POR", "flag": "🇵🇹"},
+    "SUI": {"id": "SUI", "name": "Switzerland", "code": "SUI", "flag": "🇨🇭"},
+    "DEN": {"id": "DEN", "name": "Denmark", "code": "DEN", "flag": "🇩🇰"},
+    "URU": {"id": "URU", "name": "Uruguay", "code": "URU", "flag": "🇺🇾"},
+    "MEX": {"id": "MEX", "name": "Mexico", "code": "MEX", "flag": "🇲🇽"},
+    "SEN": {"id": "SEN", "name": "Senegal", "code": "SEN", "flag": "🇸🇳"},
+    "KOR": {"id": "KOR", "name": "South Korea", "code": "KOR", "flag": "🇰🇷"},
+    "AUS": {"id": "AUS", "name": "Australia", "code": "AUS", "flag": "🇦🇺"},
 }
 
 matches_db = {
@@ -216,6 +225,9 @@ matches_db = {
         "away_team": teams_db["COL"],
         "status": "Finished",
         "score": {"home": 2, "away": 1},
+        "stage": "GROUP_STAGE",
+        "group": "GROUP_A",
+        "matchday": 1,
         "stats": {
             "possession": {"home": 48, "away": 52},
             "shots": {"home": 12, "away": 15},
@@ -239,6 +251,9 @@ matches_db = {
         "away_team": teams_db["JPN"],
         "status": "Finished",
         "score": {"home": 3, "away": 1},
+        "stage": "GROUP_STAGE",
+        "group": "GROUP_A",
+        "matchday": 1,
         "stats": {
             "possession": {"home": 58, "away": 42},
             "shots": {"home": 18, "away": 9},
@@ -262,6 +277,9 @@ matches_db = {
         "away_team": teams_db["ENG"],
         "status": "Finished",
         "score": {"home": 2, "away": 2},
+        "stage": "GROUP_STAGE",
+        "group": "GROUP_B",
+        "matchday": 1,
         "stats": {
             "possession": {"home": 51, "away": 49},
             "shots": {"home": 14, "away": 16},
@@ -278,6 +296,226 @@ matches_db = {
             {"time": 54, "type": "goal", "detail": "Regular Goal", "team_id": "ENG", "player": "Jude Bellingham"},
             {"time": 82, "type": "goal", "detail": "Regular Goal", "team_id": "ARG", "player": "Lautaro Martinez"},
         ]
+    },
+    "M004": {
+        "match_id": "M004",
+        "home_team": teams_db["FRA"],
+        "away_team": teams_db["MAR"],
+        "status": "Finished",
+        "score": {"home": 3, "away": 0},
+        "stage": "GROUP_STAGE",
+        "group": "GROUP_B",
+        "matchday": 1,
+        "stats": {},
+        "events": []
+    },
+    "M005": {
+        "match_id": "M005",
+        "home_team": teams_db["BRA"],
+        "away_team": teams_db["ESP"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "GROUP_STAGE",
+        "group": "GROUP_C",
+        "matchday": 1,
+        "stats": {},
+        "events": []
+    },
+    "M006": {
+        "match_id": "M006",
+        "home_team": teams_db["POR"],
+        "away_team": teams_db["CRO"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "GROUP_STAGE",
+        "group": "GROUP_C",
+        "matchday": 1,
+        "stats": {},
+        "events": []
+    },
+    "M007": {
+        "match_id": "M007",
+        "home_team": teams_db["ITA"],
+        "away_team": teams_db["NED"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "GROUP_STAGE",
+        "group": "GROUP_D",
+        "matchday": 1,
+        "stats": {},
+        "events": []
+    },
+    "M008": {
+        "match_id": "M008",
+        "home_team": teams_db["SUI"],
+        "away_team": teams_db["DEN"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "GROUP_STAGE",
+        "group": "GROUP_D",
+        "matchday": 1,
+        "stats": {},
+        "events": []
+    },
+    "R001": {
+        "match_id": "R001",
+        "home_team": teams_db["GER"],
+        "away_team": teams_db["MEX"],
+        "status": "Finished",
+        "score": {"home": 2, "away": 1},
+        "stage": "ROUND_16",
+        "date": "2026-06-28T16:00:00Z",
+        "stats": {}, "events": []
+    },
+    "R002": {
+        "match_id": "R002",
+        "home_team": teams_db["USA"],
+        "away_team": teams_db["SEN"],
+        "status": "Finished",
+        "score": {"home": 3, "away": 0},
+        "stage": "ROUND_16",
+        "date": "2026-06-28T20:00:00Z",
+        "stats": {}, "events": []
+    },
+    "R003": {
+        "match_id": "R003",
+        "home_team": teams_db["FRA"],
+        "away_team": teams_db["KOR"],
+        "status": "Finished",
+        "score": {"home": 1, "away": 1, "penalties": {"home": 4, "away": 2}},
+        "stage": "ROUND_16",
+        "date": "2026-06-29T16:00:00Z",
+        "stats": {}, "events": []
+    },
+    "R004": {
+        "match_id": "R004",
+        "home_team": teams_db["ARG"],
+        "away_team": teams_db["AUS"],
+        "status": "Finished",
+        "score": {"home": 4, "away": 0},
+        "stage": "ROUND_16",
+        "date": "2026-06-29T20:00:00Z",
+        "stats": {}, "events": []
+    },
+    "R005": {
+        "match_id": "R005",
+        "home_team": teams_db["ENG"],
+        "away_team": teams_db["URU"],
+        "status": "Finished",
+        "score": {"home": 2, "away": 1},
+        "stage": "ROUND_16",
+        "date": "2026-06-30T16:00:00Z",
+        "stats": {}, "events": []
+    },
+    "R006": {
+        "match_id": "R006",
+        "home_team": teams_db["NED"],
+        "away_team": teams_db["ESP"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "ROUND_16",
+        "date": "2026-06-30T20:00:00Z",
+        "stats": {}, "events": []
+    },
+    "R007": {
+        "match_id": "R007",
+        "home_team": teams_db["POR"],
+        "away_team": teams_db["SUI"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "ROUND_16",
+        "date": "2026-07-01T16:00:00Z",
+        "stats": {}, "events": []
+    },
+    "R008": {
+        "match_id": "R008",
+        "home_team": teams_db["BRA"],
+        "away_team": teams_db["ITA"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "ROUND_16",
+        "date": "2026-07-01T20:00:00Z",
+        "stats": {}, "events": []
+    },
+    "Q001": {
+        "match_id": "Q001",
+        "home_team": teams_db["GER"],
+        "away_team": teams_db["USA"],
+        "status": "Finished",
+        "score": {"home": 2, "away": 1},
+        "stage": "QUARTER_FINALS",
+        "date": "2026-07-04T16:00:00Z",
+        "stats": {}, "events": []
+    },
+    "Q002": {
+        "match_id": "Q002",
+        "home_team": teams_db["FRA"],
+        "away_team": teams_db["ARG"],
+        "status": "Finished",
+        "score": {"home": 1, "away": 1, "penalties": {"home": 3, "away": 5}},
+        "stage": "QUARTER_FINALS",
+        "date": "2026-07-04T20:00:00Z",
+        "stats": {}, "events": []
+    },
+    "Q003": {
+        "match_id": "Q003",
+        "home_team": teams_db["ENG"],
+        "away_team": teams_db["NED"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "QUARTER_FINALS",
+        "date": "2026-07-05T16:00:00Z",
+        "stats": {}, "events": []
+    },
+    "Q004": {
+        "match_id": "Q004",
+        "home_team": teams_db["POR"],
+        "away_team": teams_db["BRA"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "QUARTER_FINALS",
+        "date": "2026-07-05T20:00:00Z",
+        "stats": {}, "events": []
+    },
+    "S001": {
+        "match_id": "S001",
+        "home_team": teams_db["GER"],
+        "away_team": teams_db["ARG"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "SEMI_FINALS",
+        "date": "2026-07-08T20:00:00Z",
+        "stats": {}, "events": []
+    },
+    "S002": {
+        "match_id": "S002",
+        "home_team": teams_db["ENG"],
+        "away_team": teams_db["BRA"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "SEMI_FINALS",
+        "date": "2026-07-09T20:00:00Z",
+        "stats": {}, "events": []
+    },
+    "B001": {
+        "match_id": "B001",
+        "home_team": teams_db["ARG"],
+        "away_team": teams_db["BRA"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "BRONZE_FINAL",
+        "date": "2026-07-12T16:00:00Z",
+        "stats": {}, "events": []
+    },
+    "F001": {
+        "match_id": "F001",
+        "home_team": teams_db["GER"],
+        "away_team": teams_db["ENG"],
+        "status": "Scheduled",
+        "score": {"home": 0, "away": 0},
+        "stage": "FINAL",
+        "date": "2026-07-12T20:00:00Z",
+        "stats": {}, "events": []
     }
 }
 
@@ -822,6 +1060,36 @@ async def get_player_stats():
         "top_scorers": top_scorers,
         "top_assists": top_assists
     }
+
+NEWS_CACHE = {"data": None, "fetched_at": 0}
+NEWS_CACHE_TTL = 900
+NEWS_FEED_URL = "https://www.fotmob.com/api/news?page=1"
+
+@app.get("/news")
+async def get_news():
+    """Get football news headlines, cached server-side."""
+    import feedparser
+    now = time.time()
+    if NEWS_CACHE["data"] and (now - NEWS_CACHE["fetched_at"]) < NEWS_CACHE_TTL:
+        return NEWS_CACHE["data"]
+    try:
+        feed = feedparser.parse("https://www.theguardian.com/football/rss")
+        items = []
+        for entry in feed.entries[:20]:
+            items.append({
+                "title": entry.get("title", ""),
+                "link": entry.get("link", ""),
+                "source": "The Guardian",
+                "published": entry.get("published", ""),
+            })
+        result = {"headlines": items}
+        NEWS_CACHE["data"] = result
+        NEWS_CACHE["fetched_at"] = now
+        return result
+    except Exception as e:
+        if NEWS_CACHE["data"]:
+            return NEWS_CACHE["data"]
+        raise HTTPException(status_code=502, detail=f"Failed to fetch news: {str(e)}")
 
 @app.get("/tactics/snapshot")
 async def get_tactical_snapshot():

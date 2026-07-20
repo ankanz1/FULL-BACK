@@ -49,3 +49,9 @@ archive/
 .claude/
 .cursor/
 
+# Downloads & Temp
+*.deb
+*.pt
+*.mp4
+python-service/public/highlights/
+

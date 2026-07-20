@@ -3,6 +3,7 @@ import { gsap } from 'gsap';
 import logoMark from './assets/logo_mark.png';
 import LoadingState from './components/LoadingState';
 import ErrorState from './components/ErrorState';
+import OverviewSection from './components/OverviewSection';
 
 const API_BASE = import.meta.env.VITE_PYTHON_SERVICE_URL || 'http://localhost:8000';
 
@@ -498,13 +499,13 @@ export default function App() {
   useEffect(() => {
     if (currentPath !== '/dashboard') return;
 
-    // Always fetch matches for overview and fixtures
-    if (activeTab === 'overview' || activeTab === 'fixtures') {
+    // Always fetch matches for fixtures
+    if (activeTab === 'fixtures') {
       if (matches.length === 0) fetchMatches();
     }
 
-    // Fetch standings for table or overview
-    if (activeTab === 'table' || activeTab === 'overview') {
+    // Fetch standings for table tab (overview has its own now)
+    if (activeTab === 'table') {
       fetchStandings(selectedGroup);
     }
 
@@ -805,105 +806,7 @@ export default function App() {
             <div className="space-y-6">
               {/* Overview Tab */}
               {activeTab === 'overview' && (
-                <div className="space-y-8">
-                  {/* Live Matches */}
-                  <div>
-                    <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ LIVE_MATCHES ]</h3>
-                    {dashboardLoading['matches'] ? (
-                      <LoadingState label="Loading matches..." />
-                    ) : dashboardError['matches'] ? (
-                      <ErrorState message={dashboardError['matches']} onRetry={fetchMatches} />
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[...matches].sort((a, b) => (b.date||'').localeCompare(a.date||'')).map((match) => (
-                          <div
-                            key={match.match_id}
-                            className="border border-[#2A2A28] bg-[#171715]/40 rounded p-4 hover:bg-[#171715]/60 transition-colors cursor-pointer"
-                            onClick={() => handleMatchClick(match.match_id)}
-                          >
-                            <div className="flex justify-between items-center mb-2">
-                              <span className="mono text-[0.6rem] text-neutral-500">[ {match.match_id} ]</span>
-                              <span className={`mono text-[0.6rem] px-2 py-0.5 rounded ${
-                                match.status === 'Finished'
-                                  ? 'bg-neutral-700 text-neutral-300'
-                                  : 'bg-[#D9622B]/20 text-[#D9622B] animate-pulse'
-                              }`}>
-                                {match.status}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <div className="text-center">
-                                <div className="text-2xl">{match.home_team.flag}</div>
-                                <div className="mono text-[0.65rem] text-neutral-300 mt-1">{match.home_team.code}</div>
-                              </div>
-                              <div className="mono text-xl font-bold text-[#ECEAE3]">
-                                {match.score.home} - {match.score.away}
-                              </div>
-                              <div className="text-center">
-                                <div className="text-2xl">{match.away_team.flag}</div>
-                                <div className="mono text-[0.65rem] text-neutral-300 mt-1">{match.away_team.code}</div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Standings Snippet */}
-                  <div>
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase">[ GROUP {selectedGroup} STANDINGS ]</h3>
-                      <button
-                        onClick={() => setActiveTab('table')}
-                        className="mono text-[0.65rem] text-[#8B8A85] hover:text-[#D9622B] transition-colors"
-                      >
-                        View Full Table →
-                      </button>
-                    </div>
-                    {dashboardLoading[`standings-${selectedGroup}`] ? (
-                      <LoadingState label="Loading standings..." />
-                    ) : dashboardError[`standings-${selectedGroup}`] ? (
-                      <ErrorState message={dashboardError[`standings-${selectedGroup}`]} onRetry={() => fetchStandings(selectedGroup)} />
-                    ) : (
-                      <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-4">
-                        <table className="w-full text-left mono text-[0.7rem] text-neutral-300">
-                          <thead>
-                            <tr className="text-neutral-500 border-b border-[#2A2A28]">
-                              <th className="py-2">POS</th>
-                              <th className="py-2">TEAM</th>
-                              <th className="py-2 text-center">P</th>
-                              <th className="py-2 text-center">W</th>
-                              <th className="py-2 text-center">D</th>
-                              <th className="py-2 text-center">L</th>
-                              <th className="py-2 text-center">GD</th>
-                              <th className="py-2 text-right">PTS</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-[#2A2A28]/50">
-                            {standings.slice(0, 4).map((standing) => (
-                              <tr key={standing.team.id} className="hover:bg-neutral-900/30">
-                                <td className="py-2.5 text-[#D9622B]">{standing.position}</td>
-                                <td className="py-2.5 font-semibold text-white">
-                                  {standing.team.flag} {standing.team.name}
-                                </td>
-                                <td className="py-2.5 text-center">{standing.played}</td>
-                                <td className="py-2.5 text-center">{standing.won}</td>
-                                <td className="py-2.5 text-center">{standing.drawn}</td>
-                                <td className="py-2.5 text-center">{standing.lost}</td>
-                                <td className="py-2.5 text-center">
-                                  {standing.goals_for - standing.goals_against > 0 ? '+' : ''}
-                                  {standing.goals_for - standing.goals_against}
-                                </td>
-                                <td className="py-2.5 text-right font-bold">{standing.points}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <OverviewSection />
               )}
 
               {/* Table Tab */}

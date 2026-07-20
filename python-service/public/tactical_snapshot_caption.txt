@@ -1,1 +1,1 @@
-Team A shows a compact, narrow shape (avg depth 4m from own goal, spread 4m × 3m). Team B is compact and narrow (avg depth 4m, spread 5m × 4m). Detection and homography are approximate — this is a qualitative illustration, not a precise formation map.
+Team A: most frequent in Left-Middle (27.8% of 79 detections). Team B: most frequent in Left-Middle (25.0% of 60 detections). Ball most often in Center-Middle (35.3%). Officials filtered: 5.

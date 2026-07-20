@@ -1,10 +1,13 @@
-import os, sys, cv2, numpy as np
+import os, cv2, numpy as np
 from pathlib import Path
 from sklearn.cluster import KMeans
-from mplsoccer import Pitch
+from sklearn.preprocessing import StandardScaler
+from collections import Counter
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.patches import FancyBboxPatch
+from matplotlib.colors import to_rgba_array
 
 ROOT_DIR = Path(__file__).resolve().parent
 PUBLIC_DIR = ROOT_DIR / "public"
@@ -12,85 +15,101 @@ VIDEO_PATH = PUBLIC_DIR / "Asset_Video.mp4"
 OUTPUT_IMAGE = PUBLIC_DIR / "tactical_snapshot.png"
 CAPTION_PATH = PUBLIC_DIR / "tactical_snapshot_caption.txt"
 
-PITCH_LENGTH = 105
-PITCH_WIDTH = 68
-
-HOMOGRAPHY_PATH = PUBLIC_DIR / "homography_H.npy"
-
-KNOWN_SRC = np.array([[65, 500], [295, 470], [400, 195], [0, 217]], dtype=np.float32)
-KNOWN_DST = np.array([[0, 30.34], [0, 37.66], [52.5, 0], [52.5, 68]], dtype=np.float32)
-
 FRAME_SKIP = 30
-CONFIDENCE_THRESHOLD = 0.3
+CONF_PERSON = 0.3
+CONF_BALL = 0.25
 
-COCO_CLASSES = {0: 'person'}
+COCO_PERSON = 0
+COCO_BALL = 32
 
-def load_homography():
-    if HOMOGRAPHY_PATH.exists():
-        H = np.load(str(HOMOGRAPHY_PATH))
-        return H, np.linalg.inv(H)
-    H = cv2.getPerspectiveTransform(KNOWN_SRC, KNOWN_DST)
-    np.save(str(HOMOGRAPHY_PATH), H)
-    return H, np.linalg.inv(H)
+ZONE_LABELS_H = ["Left", "Center", "Right"]
+ZONE_LABELS_V = ["Attacking", "Middle", "Defensive"]
 
-def detect_players(frame, model):
-    results = model(frame, conf=CONFIDENCE_THRESHOLD, verbose=False)[0]
-    boxes = []
+REFEREE_COLOR_DIST_THRESHOLD = 40.0
+
+def get_frame_size(cap):
+    return int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+def zone_buckets(x, y, w, h):
+    hz = w // 3
+    vz = h // 3
+    h_idx = min(x // hz, 2)
+    v_idx = min(y // vz, 2)
+    return ZONE_LABELS_H[h_idx], ZONE_LABELS_V[v_idx], h_idx, v_idx
+
+def detect(frame, model):
+    results = model(frame, conf=CONF_PERSON, verbose=False)[0]
+    persons, balls = [], []
     if results.boxes is not None and len(results.boxes) > 0:
         for xyxy, conf, cls in zip(
             results.boxes.xyxy.cpu().numpy(),
             results.boxes.conf.cpu().numpy(),
             results.boxes.cls.cpu().numpy().astype(int)
         ):
-            if cls == 0 and conf >= CONFIDENCE_THRESHOLD:
-                boxes.append(xyxy)
-    return np.array(boxes) if boxes else np.zeros((0, 4))
+            if cls == COCO_PERSON and conf >= CONF_PERSON:
+                persons.append(xyxy)
+            elif cls == COCO_BALL and conf >= CONF_BALL:
+                balls.append(xyxy)
+    return np.array(persons) if persons else np.zeros((0, 4)), np.array(balls) if balls else np.zeros((0, 4))
 
-def compute_jersey_color(box, frame):
+def jersey_color(box, frame):
     x1, y1, x2, y2 = map(int, box)
-    crop = frame[y1:y2, x1:x2]
+    crop = frame[max(0, y1):min(frame.shape[0], y2), max(0, x1):min(frame.shape[1], x2)]
     if crop.size == 0:
         return None
-    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    torso = crop[crop.shape[0]//3:2*crop.shape[0]//3, :, :]
+    if torso.size == 0:
+        torso = crop
+    hsv = cv2.cvtColor(torso, cv2.COLOR_BGR2HSV)
     mask = (hsv[:, :, 2] > 30) & (hsv[:, :, 1] > 30)
     pixels = hsv[mask]
     if pixels.shape[0] < 10:
         return None
     return pixels.mean(axis=0)
 
-def assign_teams(color_vectors):
+def assign_teams_with_referee(color_vectors):
     if len(color_vectors) < 2:
-        return [0] * len(color_vectors)
+        return [0] * len(color_vectors), None
     stacked = np.vstack(color_vectors)
-    kmeans = KMeans(n_clusters=2, random_state=42, n_init=10).fit(stacked)
-    return list(kmeans.labels_)
+    scaler = StandardScaler()
+    scaled = scaler.fit_transform(stacked)
+    kmeans = KMeans(n_clusters=2, random_state=42, n_init=10).fit(scaled)
+    labels = list(kmeans.labels_)
 
-def project_point(point, homography):
-    pt = np.array([[point]], dtype=np.float32)
-    projected = cv2.perspectiveTransform(pt, homography)[0][0]
-    return float(projected[0]), float(projected[1])
+    centers = scaler.inverse_transform(kmeans.cluster_centers_)
+    refined = []
+    for i, (cv, lbl) in enumerate(zip(color_vectors, labels)):
+        dist = np.linalg.norm(cv - centers[lbl])
+        if dist > REFEREE_COLOR_DIST_THRESHOLD:
+            refined.append("official")
+        else:
+            refined.append(str(lbl))
+    return refined, centers
 
 def process_video():
     if not VIDEO_PATH.exists():
         print(f"ERROR: Video not found at {VIDEO_PATH}", flush=True)
-        return None, None
+        return None
 
-    print(f"Loading YOLOv8n model...", flush=True)
+    print(f"Loading YOLOv8n...", flush=True)
     from ultralytics import YOLO
     model = YOLO("yolov8n.pt")
-    H, H_inv = load_homography()
 
     cap = cv2.VideoCapture(str(VIDEO_PATH))
     if not cap.isOpened():
         print("ERROR: Cannot open video")
-        return None, None
+        return None
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS)
-    print(f"Video: {total_frames} frames at {fps:.0f} fps")
+    W, H = get_frame_size(cap)
+    print(f"Video: {total_frames} frames at {fps:.0f} fps, {W}x{H}")
 
-    all_team_a_positions = []
-    all_team_b_positions = []
+    team_zones = {"0": Counter(), "1": Counter()}
+    team_totals = {"0": 0, "1": 0}
+    officials = 0
+    ball_zones = Counter()
+    ball_total = 0
 
     frame_index = 0
     processed = 0
@@ -103,35 +122,43 @@ def process_video():
             frame_index += 1
             continue
 
-        boxes = detect_players(frame, model)
-        if len(boxes) == 0:
-            frame_index += 1
-            continue
+        persons, balls = detect(frame, model)
 
         color_vectors = []
-        pitch_positions = []
+        person_data = []
 
-        for box in boxes:
-            color = compute_jersey_color(box, frame)
-            if color is not None:
-                color_vectors.append(color)
+        for box in persons:
+            c = jersey_color(box, frame)
+            if c is None:
+                continue
+            color_vectors.append(c)
             cx = (box[0] + box[2]) / 2.0
-            bottom = box[3]
-            pitch_positions.append(project_point((cx, bottom), H))
+            cy = (box[1] + box[3]) / 2.0
+            person_data.append((c, cx, cy, box))
 
-        if len(color_vectors) < 2:
-            frame_index += 1
-            continue
+        if len(color_vectors) >= 2:
+            labels, centers = assign_teams_with_referee(color_vectors)
+            for lbl, (c, cx, cy, box) in zip(labels, person_data):
+                if lbl == "official":
+                    officials += 1
+                    continue
+                h_label, v_label, hi, vi = zone_buckets(int(cx), int(cy), W, H)
+                zone_key = f"{h_label}-{v_label}"
+                team_zones[lbl][zone_key] += 1
+                team_totals[lbl] += 1
+        elif len(color_vectors) == 1:
+            lbl = "0"
+            _, cx, cy, box = person_data[0]
+            h_label, v_label, hi, vi = zone_buckets(int(cx), int(cy), W, H)
+            team_zones[lbl][f"{h_label}-{v_label}"] += 1
+            team_totals[lbl] += 1
 
-        team_labels = assign_teams(color_vectors)
-
-        for label, pitch_pos in zip(team_labels, pitch_positions):
-            px, py = pitch_pos
-            if 0 <= px <= PITCH_LENGTH and 0 <= py <= PITCH_WIDTH:
-                if label == 0:
-                    all_team_a_positions.append((px, py))
-                else:
-                    all_team_b_positions.append((px, py))
+        for box in balls:
+            cx = (box[0] + box[2]) / 2.0
+            cy = (box[1] + box[3]) / 2.0
+            h_label, v_label, hi, vi = zone_buckets(int(cx), int(cy), W, H)
+            ball_zones[f"{h_label}-{v_label}"] += 1
+            ball_total += 1
 
         processed += 1
         if processed % 20 == 0:
@@ -141,90 +168,136 @@ def process_video():
 
     cap.release()
     print(f"Done. Processed {processed} frames.")
-    print(f"  Team A: {len(all_team_a_positions)} positions")
-    print(f"  Team B: {len(all_team_b_positions)} positions")
+    print(f"  Team A: {team_totals['0']} detections, Team B: {team_totals['1']} detections")
+    print(f"  Officials filtered: {officials}")
+    print(f"  Ball detections: {ball_total}")
 
-    if len(all_team_a_positions) == 0 and len(all_team_b_positions) == 0:
-        return None, None
-
-    return all_team_a_positions, all_team_b_positions
-
-def compute_average_positions(positions):
-    if not positions:
+    if team_totals["0"] == 0 and team_totals["1"] == 0:
         return None
-    xs = [p[0] for p in positions]
-    ys = [p[1] for p in positions]
-    return (np.mean(xs), np.mean(ys))
 
-def render_pitch(team_a_positions, team_b_positions):
-    pitch = Pitch(pitch_type="statsbomb", pitch_color="#0B1920", line_color="#FFFFFF", linewidth=1.5)
-    fig, ax = pitch.draw(figsize=(10, 6), constrained_layout=True)
+    return {
+        "team_zones": team_zones,
+        "team_totals": team_totals,
+        "officials": officials,
+        "ball_zones": dict(ball_zones),
+        "ball_total": ball_total,
+        "total_frames_processed": processed,
+    }
+
+def zone_pct(zone_counter, total):
+    if total == 0:
+        return {}
+    return {k: round(v / total * 100, 1) for k, v in zone_counter.items()}
+
+def render_zones(data):
+    W, H = 960, 600
+    fig, ax = plt.subplots(figsize=(10, 6))
+    fig.patch.set_facecolor("#0B1920")
+    ax.set_facecolor("#0B1920")
 
     color_a = "#D9622B"
     color_b = "#5DA0FC"
+    color_ball = "#FFD700"
 
-    if team_a_positions:
-        ax_a_avg = compute_average_positions(team_a_positions)
-        pitch.scatter(
-            [p[0] for p in team_a_positions], [p[1] for p in team_a_positions],
-            ax=ax, s=30, c=color_a, alpha=0.3, edgecolors="none", zorder=3
-        )
-        if ax_a_avg:
-            pitch.scatter(
-                ax_a_avg[0], ax_a_avg[1],
-                ax=ax, s=200, c=color_a, edgecolors="white", linewidths=2, zorder=5, label="Team A (avg)"
+    team_a_pct = zone_pct(data["team_zones"]["0"], data["team_totals"]["0"])
+    team_b_pct = zone_pct(data["team_zones"]["1"], data["team_totals"]["1"])
+    ball_pct = zone_pct(data["ball_zones"], data["ball_total"])
+
+    z_w, z_h = W // 3, H // 3
+
+    for vi, v_label in enumerate(ZONE_LABELS_V):
+        for hi, h_label in enumerate(ZONE_LABELS_H):
+            x0, y0 = hi * z_w, vi * z_h
+            rect = FancyBboxPatch(
+                (x0, y0), z_w, z_h,
+                boxstyle="round,pad=0.05",
+                facecolor="#112233",
+                edgecolor="#334466",
+                linewidth=1.5
             )
+            ax.add_patch(rect)
 
-    if team_b_positions:
-        ax_b_avg = compute_average_positions(team_b_positions)
-        pitch.scatter(
-            [p[0] for p in team_b_positions], [p[1] for p in team_b_positions],
-            ax=ax, s=30, c=color_b, alpha=0.3, edgecolors="none", zorder=3
-        )
-        if ax_b_avg:
-            pitch.scatter(
-                ax_b_avg[0], ax_b_avg[1],
-                ax=ax, s=200, c=color_b, edgecolors="white", linewidths=2, zorder=5, label="Team B (avg)"
+            zone_key = f"{h_label}-{v_label}"
+            a_pct = team_a_pct.get(zone_key, 0)
+            b_pct = team_b_pct.get(zone_key, 0)
+            b_p = ball_pct.get(zone_key, 0)
+
+            ax.text(
+                x0 + z_w / 2, y0 + z_h * 0.25,
+                f"A: {a_pct}%",
+                ha="center", va="center", fontsize=9, fontweight="bold",
+                color=color_a
             )
+            ax.text(
+                x0 + z_w / 2, y0 + z_h * 0.50,
+                f"B: {b_pct}%",
+                ha="center", va="center", fontsize=9, fontweight="bold",
+                color=color_b
+            )
+            if b_p > 0:
+                ax.text(
+                    x0 + z_w / 2, y0 + z_h * 0.75,
+                    f"Ball {b_p}%",
+                    ha="center", va="center", fontsize=8,
+                    color=color_ball
+                )
 
-    ax.legend(loc="upper right", frameon=True, facecolor="#081117", edgecolor="#666", fontsize=10)
-    ax.set_title("Tactical Snapshot — Averaged Player Positions", color="white", fontsize=12, pad=15)
+            if vi == 0:
+                ax.text(
+                    x0 + z_w / 2, y0 - 20,
+                    h_label,
+                    ha="center", va="bottom", fontsize=11, fontweight="bold",
+                    color="white"
+                )
+        ax.text(
+            W - 30, y0 + z_h / 2,
+            v_label,
+            ha="center", va="center", fontsize=11, fontweight="bold",
+            color="white", rotation=90
+        )
+
+    ax.set_xlim(0, W)
+    ax.set_ylim(H, 0)
+    ax.axis("off")
+
+    legend_text = (
+        f"Team A  |  Team B  |  Officials filtered: {data['officials']}  |  "
+        f"Frames: {data['total_frames_processed']}"
+    )
+    ax.text(
+        W / 2, H + 15, legend_text,
+        ha="center", va="top", fontsize=9, color="#8899AA"
+    )
 
     fig.savefig(str(OUTPUT_IMAGE), dpi=200, bbox_inches="tight", facecolor="#0B1920")
     plt.close(fig)
     print(f"Saved: {OUTPUT_IMAGE}")
 
-def generate_caption(team_a_positions, team_b_positions):
-    if not team_a_positions and not team_b_positions:
-        caption = "No player positions could be reliably detected in the clip. The camera angle or resolution may be unsuitable for automated tactical analysis."
-    elif not team_a_positions or not team_b_positions:
-        caption = "Only one team's positions were consistently detected. Team identification may be unreliable due to similar jersey colors or limited frame coverage."
+def generate_caption(data):
+    if data["team_totals"]["0"] == 0 and data["team_totals"]["1"] == 0:
+        caption = "No player positions could be reliably detected."
     else:
-        a_avg = compute_average_positions(team_a_positions)
-        b_avg = compute_average_positions(team_b_positions)
-
-        if a_avg and b_avg:
-            a_x, a_y = a_avg
-            b_x, b_y = b_avg
-            x_spread_a = np.std([p[0] for p in team_a_positions])
-            y_spread_a = np.std([p[1] for p in team_a_positions])
-            x_spread_b = np.std([p[0] for p in team_b_positions])
-            y_spread_b = np.std([p[1] for p in team_b_positions])
-
-            depth_a = "deep" if x_spread_a > 25 else "compact"
-            width_a = "narrow" if y_spread_a < 12 else "wide"
-            depth_b = "deep" if x_spread_b > 25 else "compact"
-            width_b = "narrow" if y_spread_b < 12 else "wide"
-
-            caption = (
-                f"Team A shows a {depth_a}, {width_a} shape (avg depth {a_x:.0f}m from own goal, "
-                f"spread {x_spread_a:.0f}m × {y_spread_a:.0f}m). "
-                f"Team B is {depth_b} and {width_b} (avg depth {b_x:.0f}m, "
-                f"spread {x_spread_b:.0f}m × {y_spread_b:.0f}m). "
-                f"Detection and homography are approximate — this is a qualitative illustration, not a precise formation map."
+        lines = []
+        for team_key, team_label in [("0", "A"), ("1", "B")]:
+            total = data["team_totals"][team_key]
+            if total == 0:
+                lines.append(f"Team {team_label}: not detected.")
+                continue
+            pcts = zone_pct(data["team_zones"][team_key], total)
+            top_zone = max(pcts, key=pcts.get)
+            top_pct = pcts[top_zone]
+            lines.append(
+                f"Team {team_label}: most frequent in {top_zone} ({top_pct}% of {total} detections)."
             )
-        else:
-            caption = "Player positions were detected but averaged positions could not be computed reliably."
+
+        ball_info = ""
+        if data["ball_total"] > 0:
+            bp = zone_pct(data["ball_zones"], data["ball_total"])
+            top_b = max(bp, key=bp.get)
+            ball_info = f" Ball most often in {top_b} ({bp[top_b]}%)."
+
+        caption = " ".join(lines) + ball_info
+        caption += f" Officials filtered: {data['officials']}."
 
     print(f"Caption: {caption}")
     with open(str(CAPTION_PATH), "w") as f:
@@ -233,20 +306,19 @@ def generate_caption(team_a_positions, team_b_positions):
 
 def main():
     print("=" * 60)
-    print("FULL BACK — Tactical Snapshot Pipeline")
+    print("FULL BACK — Tactical Snapshot Pipeline (Zone-Bucket)")
     print("=" * 60)
 
-    result = process_video()
-    if result[0] is None and result[1] is None:
-        print("No detections found. Check the video file and YOLO model.")
-        caption = "The tactical snapshot pipeline could not detect any players. The clip may not contain a suitable football scene."
+    data = process_video()
+    if data is None:
+        print("No detections found.")
+        caption = "The pipeline could not detect any players."
         with open(str(CAPTION_PATH), "w") as f:
             f.write(caption)
         return
 
-    team_a_positions, team_b_positions = result
-    render_pitch(team_a_positions, team_b_positions)
-    generate_caption(team_a_positions, team_b_positions)
+    render_zones(data)
+    generate_caption(data)
 
     print("\nDone. Output files:")
     print(f"  Image:    {OUTPUT_IMAGE}")
