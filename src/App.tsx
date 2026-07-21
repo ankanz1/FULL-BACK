@@ -121,12 +121,15 @@ export default function App() {
   const [matchDetailError, setMatchDetailError] = useState('');
 
   // New dashboard states
-  const [activeTab, setActiveTab] = useState<string>('overview'); // 'overview' | 'table' | 'fixtures' | 'player-stats' | 'team-stats'
+  const [activeTab, setActiveTab] = useState<string>('overview'); // 'overview' | 'table' | 'fixtures' | 'player-stats' | 'team-stats' | 'tactics'
   const [selectedGroup, setSelectedGroup] = useState<string>('A');
   const [matches, setMatches] = useState<MatchStats[]>([]);
   const [standings, setStandings] = useState<GroupStanding[]>([]);
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [teamForms, setTeamForms] = useState<Record<string, TeamForm>>({});
+  const [snapshotData, setSnapshotData] = useState<{ image_url?: string; caption?: string } | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotError, setSnapshotError] = useState('');
   const [dashboardLoading, setDashboardLoading] = useState<Record<string, boolean>>({});
   const [dashboardError, setDashboardError] = useState<Record<string, string>>({});
 
@@ -402,6 +405,21 @@ export default function App() {
     }
   };
 
+  const fetchTactics = async () => {
+    setSnapshotLoading(true);
+    setSnapshotError('');
+    try {
+      const res = await fetch(`${API_BASE}/tactics/snapshot`);
+      if (!res.ok) throw new Error('Failed to fetch tactical snapshot');
+      const data = await res.json();
+      setSnapshotData(data);
+    } catch (e) {
+      setSnapshotError((e as Error).message);
+    } finally {
+      setSnapshotLoading(false);
+    }
+  };
+
   const authenticatedFetch = async (url: string): Promise<any> => {
     const res = await fetch(url);
     if (!res.ok) {
@@ -512,6 +530,11 @@ export default function App() {
     // Fetch player stats for player-stats tab
     if (activeTab === 'player-stats') {
       if (!playerStats) fetchPlayerStats();
+    }
+
+    // Fetch tactics snapshot
+    if (activeTab === 'tactics') {
+      fetchTactics();
     }
 
     // Fetch team forms for team-stats tab (fetch for all teams in standings)
@@ -781,6 +804,7 @@ export default function App() {
                   { id: 'fixtures', label: 'Fixtures' },
                   { id: 'player-stats', label: 'Player Stats' },
                   { id: 'team-stats', label: 'Team Stats' },
+                  { id: 'tactics', label: 'Tactics' },
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -1137,6 +1161,40 @@ export default function App() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tactics Tab */}
+              {activeTab === 'tactics' && (
+                <div className="space-y-6">
+                  <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ TACTICAL_SNAPSHOT ]</h3>
+                  {snapshotLoading ? (
+                    <LoadingState label="Generating tactical snapshot..." />
+                  ) : snapshotError ? (
+                    <ErrorState message={snapshotError} onRetry={fetchTactics} />
+                  ) : snapshotData ? (
+                    <div className="space-y-4">
+                      <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-4">
+                        <img
+                          src={`${API_BASE}${snapshotData.image_url}`}
+                          alt="Tactical Snapshot"
+                          className="w-full max-w-3xl mx-auto rounded"
+                        />
+                      </div>
+                      <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-4">
+                        <p className="mono text-[0.7rem] text-[#ECEAE3] leading-relaxed">{snapshotData.caption}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <button
+                        onClick={fetchTactics}
+                        className="mono text-[0.7rem] text-[#D9622B] border border-[#D9622B]/40 rounded px-4 py-2 hover:bg-[#D9622B]/10 transition-colors"
+                      >
+                        GENERATE SNAPSHOT
+                      </button>
                     </div>
                   )}
                 </div>

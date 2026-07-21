@@ -1091,10 +1091,18 @@ async def get_news():
             return NEWS_CACHE["data"]
         raise HTTPException(status_code=502, detail=f"Failed to fetch news: {str(e)}")
 
+_snapshot_model = None
+def _get_snapshot_model():
+    global _snapshot_model
+    if _snapshot_model is None:
+        from ultralytics import YOLO
+        _snapshot_model = YOLO("yolov8n.pt")
+    return _snapshot_model
+
 @app.get("/tactics/snapshot")
 async def get_tactical_snapshot():
-    """Run or retrieve an existing tactical snapshot (player positions + averaged tactical image)."""
-    import subprocess
+    """Run or retrieve an existing tactical snapshot (player zones)."""
+    import tactical_snapshot as ts
     image_path = os.path.join(_SCRIPT_DIR, "public", "tactical_snapshot.png")
     caption_path = os.path.join(_SCRIPT_DIR, "public", "tactical_snapshot_caption.txt")
 
@@ -1105,13 +1113,15 @@ async def get_tactical_snapshot():
             needs_run = False
 
     if needs_run:
-        script = os.path.join(_SCRIPT_DIR, "tactical_snapshot.py")
-        result = subprocess.run(
-            [sys.executable or "python3", script],
-            capture_output=True, text=True, timeout=300
-        )
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Snapshot pipeline failed: {result.stderr[:500]}")
+        model = _get_snapshot_model()
+        data = ts.process_video(model=model)
+        if data is None:
+            caption = "Pipeline could not detect any players."
+            with open(caption_path, "w") as f:
+                f.write(caption)
+        else:
+            ts.render_zones(data)
+            ts.generate_caption(data)
 
     caption = ""
     if os.path.exists(caption_path):

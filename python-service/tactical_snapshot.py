@@ -86,14 +86,15 @@ def assign_teams_with_referee(color_vectors):
             refined.append(str(lbl))
     return refined, centers
 
-def process_video():
+def process_video(model=None):
     if not VIDEO_PATH.exists():
         print(f"ERROR: Video not found at {VIDEO_PATH}", flush=True)
         return None
 
-    print(f"Loading YOLOv8n...", flush=True)
-    from ultralytics import YOLO
-    model = YOLO("yolov8n.pt")
+    if model is None:
+        print(f"Loading YOLOv8n...", flush=True)
+        from ultralytics import YOLO
+        model = YOLO("yolov8n.pt")
 
     cap = cv2.VideoCapture(str(VIDEO_PATH))
     if not cap.isOpened():
