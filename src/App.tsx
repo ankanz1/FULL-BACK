@@ -119,6 +119,15 @@ export default function App() {
   const [matchDetail, setMatchDetail] = useState<MatchStats | null>(null);
   const [matchDetailLoading, setMatchDetailLoading] = useState(false);
   const [matchDetailError, setMatchDetailError] = useState('');
+  const [modalPrediction, setModalPrediction] = useState<any>(null);
+  const [modalPredictionLoading, setModalPredictionLoading] = useState(false);
+  const [modalPredictionError, setModalPredictionError] = useState('');
+  const [modalBreakdown, setModalBreakdown] = useState<any>(null);
+  const [modalBreakdownLoading, setModalBreakdownLoading] = useState(false);
+  const [modalBreakdownError, setModalBreakdownError] = useState('');
+  const [modalHighlights, setModalHighlights] = useState<Highlight[]>([]);
+  const [modalHighlightsLoading, setModalHighlightsLoading] = useState(false);
+  const [modalHighlightsError, setModalHighlightsError] = useState('');
 
   // New dashboard states
   const [activeTab, setActiveTab] = useState<string>('overview'); // 'overview' | 'table' | 'fixtures' | 'player-stats' | 'team-stats' | 'tactics'
@@ -351,7 +360,46 @@ export default function App() {
 
   const handleMatchClick = (matchId: string) => {
     setSelectedMatchId(matchId);
+    setMatchDetail(null);
+    setModalPrediction(null);
+    setModalBreakdown(null);
+    setModalHighlights([]);
+    setModalPredictionError('');
+    setModalBreakdownError('');
+    setModalHighlightsError('');
     fetchMatchDetail(matchId);
+
+    const fetchPred = async () => {
+      setModalPredictionLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/predict/match/${matchId}`);
+        if (!res.ok) throw new Error('Failed');
+        setModalPrediction(await res.json());
+      } catch (e) { setModalPredictionError((e as Error).message); }
+      finally { setModalPredictionLoading(false); }
+    };
+    const fetchBrk = async () => {
+      setModalBreakdownLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/tactical/match/${matchId}`);
+        if (!res.ok) throw new Error('Failed');
+        setModalBreakdown(await res.json());
+      } catch (e) { setModalBreakdownError((e as Error).message); }
+      finally { setModalBreakdownLoading(false); }
+    };
+    const fetchHl = async () => {
+      setModalHighlightsLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/highlights/match/${matchId}`);
+        if (!res.ok) throw new Error('Failed');
+        const d = await res.json();
+        setModalHighlights(d.highlights || []);
+      } catch (e) { setModalHighlightsError((e as Error).message); }
+      finally { setModalHighlightsLoading(false); }
+    };
+    fetchPred();
+    fetchBrk();
+    fetchHl();
   };
 
   // Fetch standings for a group
@@ -770,7 +818,7 @@ export default function App() {
             {/* ── BOTTOM BAR ── */}
             <div className="hero-bottombar">
               <div className="select-none">
-                <div className="mono text-[0.62rem] text-[#D9622B] tracking-widest mb-0.5">[ SEASON 2026 — NIGHT MATCH ]</div>
+                <div className="mono text-[0.62rem] text-[#D9622B] tracking-widest mb-0.5">[ SEASON 2026 ]</div>
                 <div className="mono text-[0.62rem] text-[#8B8A85] tracking-wider">SILENT GRIDIRON &amp; STADIUM LIGHT AT REST</div>
               </div>
               <button
@@ -1786,13 +1834,13 @@ export default function App() {
 
       {/* Shared Footer component */}
       <footer className="h-16 border-t border-[#2A2A28] bg-[#0E0E0E]/40 px-8 flex items-center justify-between text-[0.6rem] text-neutral-500 z-10">
-        <span className="mono">© 2026 FULL BACK // SUBMISSION FOR INJECTIVE GLOBAL CUP</span>
-        <span className="mono">ALL FEATURES: FREELY ACCESSIBLE</span>
+        <span className="mono">© 2026 FULL BACK //</span>
+        <span className="mono">ENJOY ALL FEATURES</span>
       </footer>
 
       {/* Match Detail Modal */}
       {matchDetail && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none animate-fade-in" onClick={() => setMatchDetail(null)}>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none animate-fade-in" onClick={() => { setMatchDetail(null); setModalPrediction(null); setModalBreakdown(null); setModalHighlights([]); }}>
           <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-[#2A2A28] bg-[#171715] rounded shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {/* Close button */}
             <div className="sticky top-0 z-10 flex justify-end p-3 bg-[#171715]/90">
@@ -1908,6 +1956,72 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Prediction */}
+            {modalPrediction && (
+              <div className="px-6 py-5 border-b border-[#2A2A28]">
+                <h3 className="mono text-[0.65rem] text-[#D9622B] tracking-widest uppercase mb-3">[ OUTCOME_PREDICTION ]</h3>
+                <div className="flex gap-4 mb-3">
+                  {['home_win','draw','away_win'].map((k) => (
+                    <div key={k} className="flex-1 text-center border border-[#2A2A28] rounded p-2 bg-[#0E0E0E]/60">
+                      <div className="mono text-[0.55rem] text-neutral-500 uppercase">{k.replace('_',' ')}</div>
+                      <div className="mono text-lg font-bold text-[#D9622B]">{modalPrediction.probabilities?.[k] ?? 0}%</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mono text-[0.65rem] text-neutral-300 leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
+                  {modalPrediction.prediction_analysis?.split('\n').slice(0, 8).join('\n')}
+                </div>
+              </div>
+            )}
+            {modalPredictionLoading && (
+              <div className="px-6 py-4 text-center border-b border-[#2A2A28]">
+                <div className="w-5 h-5 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin inline-block mr-2" />
+                <span className="mono text-[0.55rem] text-neutral-500">LOADING PREDICTION...</span>
+              </div>
+            )}
+
+            {/* Tactical Breakdown */}
+            {modalBreakdown && (
+              <div className="px-6 py-5 border-b border-[#2A2A28]">
+                <h3 className="mono text-[0.65rem] text-[#D9622B] tracking-widest uppercase mb-3">[ TACTICAL_BREAKDOWN ]</h3>
+                <div className="mono text-[0.65rem] text-neutral-300 leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
+                  {modalBreakdown.tactical_breakdown?.split('\n').slice(0, 8).join('\n')}
+                </div>
+              </div>
+            )}
+            {modalBreakdownLoading && (
+              <div className="px-6 py-4 text-center border-b border-[#2A2A28]">
+                <div className="w-5 h-5 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin inline-block mr-2" />
+                <span className="mono text-[0.55rem] text-neutral-500">LOADING BREAKDOWN...</span>
+              </div>
+            )}
+
+            {/* Highlights */}
+            {modalHighlights.length > 0 && (
+              <div className="px-6 py-5 border-b border-[#2A2A28]">
+                <h3 className="mono text-[0.65rem] text-[#D9622B] tracking-widest uppercase mb-3">[ HIGHLIGHTS ]</h3>
+                <div className="space-y-3 max-h-48 overflow-y-auto">
+                  {modalHighlights.slice(0, 5).map((hl: Highlight) => (
+                    <div key={hl.id} className="flex items-start gap-3 border border-[#2A2A28]/50 rounded p-2.5 bg-[#0E0E0E]/40">
+                      <div className="w-16 h-10 rounded overflow-hidden flex-shrink-0 bg-[#2A2A28]">
+                        {hl.thumbnail_url && <img src={hl.thumbnail_url} alt="" className="w-full h-full object-cover" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="mono text-[0.6rem] text-[#D9622B]">{intToTime(hl.timestamp)}</div>
+                        <div className="mono text-[0.6rem] text-neutral-300 truncate">{hl.description}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {modalHighlightsLoading && (
+              <div className="px-6 py-4 text-center border-b border-[#2A2A28]">
+                <div className="w-5 h-5 border-2 border-t-[#D9622B] border-neutral-800 rounded-full animate-spin inline-block mr-2" />
+                <span className="mono text-[0.55rem] text-neutral-500">LOADING HIGHLIGHTS...</span>
               </div>
             )}
 
