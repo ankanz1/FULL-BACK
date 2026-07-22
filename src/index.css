@@ -48,186 +48,6 @@ body {
   justify-content: center;
 }
 
-/* Ambient full-bleed backdrop */
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  background-image:
-    linear-gradient(180deg, rgba(6, 7, 5, 0.55) 0%, rgba(6, 7, 5, 0.85) 55%, rgba(6, 7, 5, 0.98) 100%),
-    url('https://images.unsplash.com/photo-1459865264687-595d652de67e?auto=format&fit=crop&q=90&w=2600');
-  background-size: cover;
-  background-position: center 40%;
-  filter: grayscale(1) contrast(1.15) brightness(0.5);
-  transform: scale(1.02);
-}
-
-.backdrop::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.75) 100%);
-}
-
-.field-grain {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 100;
-  opacity: var(--grain-opacity);
-}
-
-.viewport {
-  position: relative;
-  z-index: 5;
-  perspective: 2000px;
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.canvas-3d {
-  position: relative;
-  width: 800px;
-  height: 500px;
-  transform-style: preserve-3d;
-  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.layer {
-  position: absolute;
-  inset: 0;
-  border: 1px solid rgba(224, 224, 224, 0.12);
-  background-size: cover;
-  background-position: center;
-  transition: transform 0.5s ease;
-}
-
-.layer-1 {
-  background: linear-gradient(180deg, #171715 0%, #0E0E0E 100%);
-}
-
-.layer-2 {
-  background: transparent;
-  opacity: 0;
-}
-
-.layer-3 {
-  background: transparent;
-  opacity: 0;
-}
-
-.contours {
-  position: absolute;
-  width: 200%;
-  height: 200%;
-  top: -50%;
-  left: -50%;
-  background-image: repeating-radial-gradient(circle at 50% 50%, transparent 0, transparent 38px, rgba(217, 98, 43, 0.06) 39px, transparent 40px);
-  transform: translateZ(120px);
-  pointer-events: none;
-}
-
-.pitch-lines {
-  position: absolute;
-  inset: 0;
-  transform: translateZ(45px);
-  pointer-events: none;
-  opacity: 0.5;
-}
-
-.interface-grid {
-  position: fixed;
-  inset: 0;
-  padding: 2.5rem;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto 1fr auto;
-  z-index: 10;
-  pointer-events: none;
-}
-
-.hero-title {
-  grid-column: 1 / -1;
-  align-self: center;
-  font-size: clamp(3rem, 10vw, 9.5rem);
-  line-height: 0.85;
-  letter-spacing: -0.04em;
-  mix-blend-mode: difference;
-  margin: 0;
-}
-
-.cta-button {
-  pointer-events: auto;
-  background: var(--silver);
-  color: var(--bg);
-  padding: 1rem 2rem;
-  text-decoration: none;
-  font-weight: 700;
-  font-size: 0.8rem;
-  letter-spacing: 0.05em;
-  clip-path: polygon(0 0, 100% 0, 100% 70%, 85% 100%, 0 100%);
-  transition: 0.3s;
-  display: inline-block;
-}
-
-.cta-button:hover {
-  background: var(--accent);
-  transform: translateY(-5px);
-  color: #fff;
-}
-
-.scroll-hint {
-  position: absolute;
-  bottom: 2rem;
-  left: 50%;
-  width: 1px;
-  height: 60px;
-  background: linear-gradient(to bottom, var(--silver), transparent);
-  animation: flow 2s infinite ease-in-out;
-  z-index: 10;
-}
-
-@keyframes flow {
-
-  0%,
-  100% {
-    transform: scaleY(0);
-    transform-origin: top;
-  }
-
-  50% {
-    transform: scaleY(1);
-    transform-origin: top;
-  }
-
-  51% {
-    transform: scaleY(1);
-    transform-origin: bottom;
-  }
-}
-
-.mono {
-  font-family: 'JetBrains Mono', monospace;
-}
-
-@media (max-width: 768px) {
-  .interface-grid {
-    padding: 1.5rem;
-  }
-
-  .canvas-3d {
-    width: 90vw;
-    height: 55vw;
-  }
-}
-
 /* Animations */
 @keyframes fadeIn {
   from {
@@ -268,228 +88,203 @@ body {
   transform: translateX(-101%);
 }
 
-/* ══════════════════════════════════════════════════════════
-   HOME PAGE — full-screen hero layout
-   ══════════════════════════════════════════════════════════
-   Structure:
-     .hero-root            3-row grid (topbar / body / bottombar)
-     .hero-topbar          logo + telemetry
-     .hero-body            2-col: title-block | card-scene
-     .hero-title-block     giant display headline (z-20, overlaps card)
-     .hero-display         the actual <h1> text
-     .hero-card-scene      perspective container (right col)
-     .hero-card            tilt wrapper — JS writes rotateX/Y here
-     .hero-card-img        stadium photo div
-     .hero-card-sheen      glass diagonal highlight
-     .hero-card-hud        corner micro-label base
-   ══════════════════════════════════════════════════════════ */
+/* ───────────────────────────────────────────────
+   HERO — 3D Canvas Parallax  (route "/")
+   ─────────────────────────────────────────────── */
 
-/* ── Root: full-viewport 3-row grid ── */
 .hero-root {
-  position: relative;
-  width: 100%;
-  min-height: 100vh;
-  display: grid;
-  grid-template-rows: 56px 1fr 68px;
-  overflow: hidden;
+  position: fixed;
+  inset: 0;
   background: #0E0E0E;
-  isolation: isolate; /* new stacking context so mix-blend works cleanly */
+  overflow: hidden;
+  isolation: isolate;
 }
 
-/* Subtle vertical grain columns */
-.hero-root::before {
+.hero-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    linear-gradient(180deg, rgba(14,14,14,0.45) 0%, rgba(14,14,14,0.75) 55%, rgba(14,14,14,0.95) 100%),
+    url('https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&q=90&w=2600');
+  background-size: cover;
+  background-position: center 35%;
+  filter: grayscale(0.15) saturate(1.4) contrast(1.1) brightness(0.65);
+  transform: scale(1.02);
+}
+
+.hero-backdrop::after {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 0;
+  background: radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(0,0,0,0.75) 100%);
+}
+
+.hero-grain {
+  position: fixed;
+  inset: 0;
   pointer-events: none;
-  background-image: repeating-linear-gradient(
-    90deg,
-    transparent,
-    transparent 39px,
-    rgba(255, 255, 255, 0.016) 40px
-  );
+  z-index: 40;
+  opacity: var(--grain-opacity, 0.14);
 }
 
-/* ── Top bar ── */
-.hero-topbar {
-  position: relative;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 2rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
-}
-
-/* ── Bottom bar ── */
-.hero-bottombar {
-  position: relative;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 2rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
-}
-
-/* ── Body: 2-col grid (title left, card right) ── */
-.hero-body {
-  position: relative;
-  z-index: 10;
+.hero-interface {
+  position: fixed;
+  inset: 0;
+  padding: 2.5rem;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: center;
-  padding: 2.5rem 2rem 2.5rem 2.5rem;
-  overflow: visible;
-}
-
-/* ── Left: title block — z-20 so text prints over the card ── */
-.hero-title-block {
-  position: relative;
+  grid-template-rows: auto 1fr auto;
   z-index: 20;
-  /* Bleed right so the headline visually overlaps the card edge */
-  margin-right: -6vw;
+  pointer-events: none;
 }
 
-/* The <h1> itself */
-.hero-display {
-  font-size: clamp(3.2rem, 8.5vw, 8.8rem);
+.hero-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: auto;
+}
+
+.hero-body {
+  display: flex;
+  align-items: center;
+}
+
+.hero-bottombar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  pointer-events: auto;
+}
+
+.hero-cta {
+  pointer-events: auto;
+  background: #ECEAE3;
+  color: #0E0E0E;
+  padding: 1rem 2rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  clip-path: polygon(0 0, 100% 0, 100% 70%, 85% 100%, 0 100%);
+  transition: all 0.3s ease;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hero-cta:hover {
+  background: #D9622B;
+  transform: translateY(-5px);
+  color: #fff;
+}
+
+.hero-title-block {
+  width: 100%;
+}
+
+.hero-title {
+  font-size: clamp(3rem, 10vw, 9.5rem);
   font-weight: 900;
-  line-height: 0.87;
-  letter-spacing: -0.03em;
+  line-height: 0.85;
+  letter-spacing: -0.04em;
   color: #ECEAE3;
   margin: 0;
-  /* Cuts through the photo cleanly without hard edges */
   mix-blend-mode: difference;
-}
 
-/* ── Right: card scene — houses the perspective camera ── */
-.hero-card-scene {
-  position: relative;
-  z-index: 15;
+
+
+.hero-viewport {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  perspective: 2000px;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Perspective sits here so only the card gets the 3-D space */
-  perspective: 1100px;
-  perspective-origin: 50% 50%;
-}
-
-/* Ambient glow beneath the card (pseudo-element on the scene) */
-.hero-card-scene::after {
-  content: '';
-  position: absolute;
-  bottom: -36px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 75%;
-  height: 56px;
-  background: radial-gradient(ellipse, rgba(217, 98, 43, 0.20) 0%, transparent 70%);
-  filter: blur(18px);
-  pointer-events: none;
-  z-index: -1;
-}
-
-/* ── Card: receives JS rotateX/Y via tiltWrapRef ── */
-.hero-card {
-  position: relative;
-  width: 100%;
-  max-width: 580px;
-  aspect-ratio: 16 / 10;
-  border-radius: 6px;
   overflow: hidden;
+}
+
+.canvas-3d {
+  position: relative;
+  width: 800px;
+  height: 500px;
   transform-style: preserve-3d;
-  /* Resting tilt — JS overrides on first rAF tick */
-  transform: perspective(1100px) rotateY(8deg) rotateX(-5deg);
-
-  /* Multi-layer elevation shadow */
-  box-shadow:
-    0 4px  14px rgba(0, 0, 0, 0.55),
-    0 16px 44px  rgba(0, 0, 0, 0.50),
-    0 40px 80px  rgba(0, 0, 0, 0.40),
-    0 0    0 1px rgba(217, 98, 43, 0.15);
+  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ── Stadium photo — fills the card, 5% bleed for parallax headroom ── */
-.hero-card-img {
-  position: absolute;
-  inset: -5%;
-  width: 110%;
-  height: 110%;
-  background-image:
-    linear-gradient(
-      140deg,
-      rgba(14, 14, 14, 0.50) 0%,
-      rgba(14, 14, 14, 0.12) 44%,
-      rgba(14, 14, 14, 0.42) 100%
-    ),
-    url('https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?auto=format&fit=crop&q=85&w=1400');
-  background-size: cover;
-  background-position: center 30%;
-  filter: grayscale(1) contrast(1.2) brightness(0.72);
-}
-
-/* ── Glass sheen — diagonal top-left highlight ── */
-.hero-card-sheen {
+.layer {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    125deg,
-    rgba(255, 255, 255, 0.11) 0%,
-    rgba(255, 255, 255, 0.04) 32%,
-    transparent 56%
-  );
-  border-radius: inherit;
+  border: 1px solid rgba(224, 224, 224, 0.12);
+  background-size: cover;
+  background-position: center;
+  transition: transform 0.5s ease;
 }
 
-/* ── HUD corner micro-labels ── */
-.hero-card-hud {
+.layer-1 {
+  background: linear-gradient(180deg, #0d1a0d 0%, #0E0E0E 100%);
+  filter: none;
+}
+
+.layer-2 {
+  background: transparent;
+  filter: none;
+  opacity: 0;
+  mix-blend-mode: normal;
+}
+
+.layer-3 {
+  background: transparent;
+  filter: none;
+  opacity: 0;
+  mix-blend-mode: normal;
+}
+
+.pitch-lines {
   position: absolute;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.52rem;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: rgba(236, 234, 227, 0.40);
+  inset: 0;
+  transform: translateZ(45px);
   pointer-events: none;
-  user-select: none;
-  line-height: 1;
+  opacity: 0.5;
 }
-.hero-card-hud--tl { top: 10px;    left: 12px;  }
-.hero-card-hud--tr { top: 10px;    right: 12px; }
-.hero-card-hud--bl { bottom: 10px; left: 12px;  }
-.hero-card-hud--br { bottom: 10px; right: 12px; color: rgba(217, 98, 43, 0.55); }
 
-/* ── Responsive: stack on narrow screens ── */
+.contours {
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background-image: repeating-radial-gradient(circle at 50% 50%, transparent 0, transparent 38px, rgba(217, 98, 43, 0.06) 39px, transparent 40px);
+  transform: translateZ(120px);
+  pointer-events: none;
+}
+
+.scroll-hint {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  width: 1px;
+  height: 60px;
+  background: linear-gradient(to bottom, #ECEAE3, transparent);
+  animation: scrollFlow 2s infinite ease-in-out;
+  z-index: 10;
+}
+
+@keyframes scrollFlow {
+  0%, 100% { transform: scaleY(0); transform-origin: top; }
+  50% { transform: scaleY(1); transform-origin: top; }
+  51% { transform: scaleY(1); transform-origin: bottom; }
+}
+
 @media (max-width: 860px) {
-  .hero-body {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
-    padding: 2rem 1.5rem;
-    gap: 2rem;
-  }
-
-  .hero-title-block {
-    margin-right: 0;
-    text-align: center;
-  }
-
-  .hero-display {
-    font-size: clamp(2.4rem, 11vw, 4.5rem);
-    mix-blend-mode: normal; /* no card to blend through on mobile */
-  }
-
-  .hero-card {
-    max-width: 88vw;
-    transform: perspective(1100px) rotateY(0deg) rotateX(-2deg);
-  }
+  .hero-interface { padding: 1.5rem; }
+  .canvas-3d { width: 90vw; height: 55vw; }
+  .hero-title { font-size: clamp(2.8rem, 12vw, 5rem); }
 }
 
-/* ── Reduced-motion: keep shadow, freeze tilt ── */
 @media (prefers-reduced-motion: reduce) {
-  .hero-card {
-    transform: perspective(1100px) rotateY(8deg) rotateX(-5deg) !important;
-    transition: none !important;
-  }
+  .canvas-3d { transform: rotateX(55deg) rotateZ(-25deg) !important; transition: none !important; }
 }

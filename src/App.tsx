@@ -191,49 +191,61 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', handler);
   }, []);
 
-  // ── Hero card cursor-tilt rAF loop ──
-  // Drives rotateX / rotateY on the .hero-card via tiltWrapRef.
-  // Bob is NOT used here (card is static except for cursor interaction).
+  // ── Hero 3D canvas cursor-tilt rAF loop ──
+  // Drives rotateX / rotateZ on the .canvas-3d via tiltWrapRef.
+  // Each .layer gets a parallax translate offset based on depth.
   useEffect(() => {
     if (currentPath !== '/') return;
 
-    const card = tiltWrapRef.current;
-    if (!card) return;
+    const canvas = tiltWrapRef.current;
+    if (!canvas) return;
 
-    // Resting angles (match the CSS default)
-    const REST_RY = 8;   // deg
-    const REST_RX = -5;  // deg
-    const MAX_D  = 7;    // max delta from rest
+    const layers = Array.from(canvas.querySelectorAll('.layer'));
+
+    const REST_RX = 55;
+    const REST_RZ = -25;
+    const MAX_D  = 8;
 
     if (reducedMotion) {
-      card.style.transform = `perspective(1100px) rotateY(${REST_RY}deg) rotateX(${REST_RX}deg)`;
+      canvas.style.transform = `rotateX(${REST_RX}deg) rotateZ(${REST_RZ}deg)`;
+      layers.forEach((layer, i) => {
+        (layer as HTMLElement).style.transform = `translateZ(${(i + 1) * 15}px)`;
+      });
       return;
     }
 
-    let targetRY = REST_RY;
     let targetRX = REST_RX;
-    let curRY = REST_RY;
+    let targetRZ = REST_RZ;
     let curRX = REST_RX;
+    let curRZ = REST_RZ;
     let rafId: number;
 
     const onMove = (e: MouseEvent) => {
-      const nx = (e.clientX / window.innerWidth)  * 2 - 1; // -1..+1
+      const nx = (e.clientX / window.innerWidth)  * 2 - 1;
       const ny = (e.clientY / window.innerHeight) * 2 - 1;
-      targetRY = REST_RY + nx * MAX_D;
       targetRX = REST_RX - ny * MAX_D;
+      targetRZ = REST_RZ + nx * MAX_D;
     };
 
-    const onLeave = () => { targetRY = REST_RY; targetRX = REST_RX; };
+    const onLeave = () => { targetRX = REST_RX; targetRZ = REST_RZ; };
 
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseleave', onLeave);
 
     const tick = () => {
-      curRY += (targetRY - curRY) * 0.07;
       curRX += (targetRX - curRX) * 0.07;
+      curRZ += (targetRZ - curRZ) * 0.07;
       if (tiltWrapRef.current) {
         tiltWrapRef.current.style.transform =
-          `perspective(1100px) rotateY(${curRY.toFixed(3)}deg) rotateX(${curRX.toFixed(3)}deg)`;
+          `rotateX(${curRX.toFixed(3)}deg) rotateZ(${curRZ.toFixed(3)}deg)`;
+        const layers = Array.from(tiltWrapRef.current.querySelectorAll('.layer'));
+        layers.forEach((layer, i) => {
+          const depth = (i + 1) * 15;
+          const moveX = (curRZ - REST_RZ) * (i + 1) * 0.03;
+          const moveY = (curRX - REST_RX) * (i + 1) * 0.03;
+          (layer as HTMLElement).style.transform =
+            `translateZ(${depth}px) translate(${moveX.toFixed(2)}px, ${moveY.toFixed(2)}px)`;
+        });
       }
       rafId = requestAnimationFrame(tick);
     };
@@ -249,15 +261,21 @@ export default function App() {
 
   // GSAP Entrance Animations
   const triggerEntranceAnims = () => {
-    // 3D Canvas scale zoom in
-    gsap.fromTo('.viewport',
-      { scale: 0.9 },
-      { scale: 1, duration: 2, ease: 'power3.out' }
-    );
-    // Micro headlines wipe on
+    const canvas = tiltWrapRef.current;
+    if (canvas) {
+      gsap.set(canvas, { opacity: 0, scale: 0.8, rotateX: 90, rotateZ: 0 });
+      gsap.to(canvas, {
+        opacity: 1, scale: 1, rotateX: 55, rotateZ: -25,
+        duration: 2.5, ease: 'power3.out', delay: 0.3
+      });
+    }
     gsap.fromTo('.hero-title',
       { clipPath: 'polygon(0 0, 0 0, 0 100%, 0% 100%)' },
       { clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%)', duration: 1.5, ease: 'power4.inOut', delay: 0.5 }
+    );
+    gsap.fromTo('.hero-bottombar > *',
+      { y: 20, opacity: 0 },
+      { y: 0, opacity: 1, duration: 1, ease: 'power3.out', delay: 0.8, stagger: 0.15 }
     );
   };
 
@@ -772,62 +790,82 @@ export default function App() {
         {currentPath === '/' && (
           <div className="hero-root">
 
-            {/* ── TOP BAR ── */}
-            <div className="hero-topbar">
-              <div className="flex items-center gap-3">
-                <img src={logoMark} alt="" className="w-7 h-7 object-contain" />
-                <span className="font-syncopate text-[0.72rem] tracking-[0.22em] font-bold uppercase text-[#ECEAE3]">FULL BACK</span>
-              </div>
-              <div className="mono text-[0.58rem] text-[#D9622B] text-right leading-relaxed select-none hidden md:flex flex-col items-end">
-                <span>LATITUDE: 41.8623° N</span>
-                <span>FLOODLIGHT: 4000K</span>
-              </div>
-            </div>
+            {/* SVG grain filter */}
+            <svg style={{position:'absolute',width:0,height:0}}>
+              <filter id="grain">
+                <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" />
+                <feColorMatrix type="saturate" values="0" />
+              </filter>
+            </svg>
 
-            {/* ── BODY: left title / right card ── */}
-            <div className="hero-body">
+            {/* Fixed backdrop */}
+            <div className="hero-backdrop" />
+            <div className="hero-grain" style={{filter:'url(#grain)'}} />
 
-              {/* Left: giant display title — z-20 so it prints over the card */}
-              <div className="hero-title-block">
-                <h1 className="hero-display font-syncopate uppercase select-none">
-                  EMPTY<br />GRIDIRON
-                </h1>
-              </div>
-
-              {/* Right: 3-D tilt card scene */}
-              <div className="hero-card-scene">
-                {/* tiltWrapRef — rAF writes perspective rotateX/Y here */}
-                <div
-                  ref={tiltWrapRef}
-                  className="hero-card"
-                  style={{ willChange: 'transform' }}
-                >
-                  {/* Stadium photo */}
-                  <div className="hero-card-img" />
-                  {/* Glass sheen */}
-                  <div className="hero-card-sheen" />
-                  {/* Corner HUD micro-labels */}
-                  <span className="hero-card-hud hero-card-hud--tl">FIELD_CAM_01 :: LIVE</span>
-                  <span className="hero-card-hud hero-card-hud--tr">TELEMETRY_ON</span>
-                  <span className="hero-card-hud hero-card-hud--bl">LAT 41.8623°N</span>
-                  <span className="hero-card-hud hero-card-hud--br">BASE_SEPOLIA</span>
+            {/* Interface grid (z-10) */}
+            <div className="hero-interface">
+              <div className="hero-topbar">
+                <div className="flex items-center gap-3">
+                  <img src={logoMark} alt="" className="w-7 h-7 object-contain" />
+                  <span className="font-syncopate text-[0.72rem] tracking-[0.22em] font-bold uppercase text-[#ECEAE3]">FULL BACK</span>
+                </div>
+                <div className="mono text-[0.58rem] text-[#D9622B] text-right leading-relaxed select-none hidden md:flex flex-col items-end">
+                  <span>LATITUDE: 41.8623° N</span>
+                  <span>FLOODLIGHT: 4000K</span>
                 </div>
               </div>
+
+              <div className="hero-body">
+                <div className="hero-title-block">
+                  <h1 className="hero-title font-syncopate uppercase select-none">
+                    EMPTY<br />GRIDIRON
+                  </h1>
+                </div>
+              </div>
+              <div className="hero-bottombar">
+                <div className="select-none">
+                  <div className="mono text-[0.62rem] text-[#D9622B] tracking-widest mb-0.5">[ SEASON 2026 — NIGHT MATCH ]</div>
+                  <div className="mono text-[0.62rem] text-[#8B8A85] tracking-wider">SILENT GRIDIRON &amp; STADIUM LIGHT AT REST</div>
+                </div>
+                <button
+                  onClick={() => handleNavigate('/dashboard')}
+                  className="hero-cta"
+                >
+                  ENTER THE FIELD →
+                </button>
+              </div>
             </div>
 
-            {/* ── BOTTOM BAR ── */}
-            <div className="hero-bottombar">
-              <div className="select-none">
-                <div className="mono text-[0.62rem] text-[#D9622B] tracking-widest mb-0.5">[ SEASON 2026 ]</div>
-                <div className="mono text-[0.62rem] text-[#8B8A85] tracking-wider">SILENT GRIDIRON &amp; STADIUM LIGHT AT REST</div>
+            {/* 3D canvas (z-5) */}
+            <div className="hero-viewport">
+              <div ref={tiltWrapRef} className="canvas-3d" style={{ willChange: 'transform' }}>
+                <div className="layer layer-1" />
+                <div className="layer layer-2" />
+                <div className="layer layer-3" />
+                <svg className="pitch-lines" viewBox="0 0 1050 680" preserveAspectRatio="none" fill="none" stroke="rgba(236,234,227,0.55)" strokeWidth="1.2">
+                  <rect x="20" y="20" width="1010" height="640" rx="2" />
+                  <line x1="525" y1="20" x2="525" y2="660" />
+                  <circle cx="525" cy="340" r="80" />
+                  <circle cx="525" cy="340" r="2" fill="rgba(236,234,227,0.7)" />
+                  <rect x="20" y="170" width="140" height="340" />
+                  <rect x="20" y="250" width="50" height="180" />
+                  <circle cx="110" cy="340" r="2" fill="rgba(236,234,227,0.7)" />
+                  <path d="M160 280 A 70 70 0 0 1 160 400" />
+                  <rect x="890" y="170" width="140" height="340" />
+                  <rect x="980" y="250" width="50" height="180" />
+                  <circle cx="940" cy="340" r="2" fill="rgba(236,234,227,0.7)" />
+                  <path d="M890 280 A 70 70 0 0 0 890 400" />
+                  <path d="M20 40 A 20 20 0 0 0 40 20" />
+                  <path d="M1010 40 A 20 20 0 0 1 1030 20" />
+                  <path d="M20 640 A 20 20 0 0 1 40 660" />
+                  <path d="M1010 640 A 20 20 0 0 0 1030 660" />
+                </svg>
+                <div className="contours" />
               </div>
-              <button
-                onClick={() => handleNavigate('/dashboard')}
-                className="mono border border-[#ECEAE3] text-[#ECEAE3] px-8 py-3 bg-transparent hover:bg-[#D9622B] hover:border-[#D9622B] transition-all duration-300 font-semibold tracking-wider text-[0.72rem] cursor-pointer whitespace-nowrap"
-              >
-                ENTER THE FIELD →
-              </button>
             </div>
+
+            {/* Scroll hint */}
+            <div className="scroll-hint" />
           </div>
         )}
 
@@ -1833,10 +1871,12 @@ export default function App() {
       </main>
 
       {/* Shared Footer component */}
-      <footer className="h-16 border-t border-[#2A2A28] bg-[#0E0E0E]/40 px-8 flex items-center justify-between text-[0.6rem] text-neutral-500 z-10">
-        <span className="mono">© 2026 FULL BACK //</span>
-        <span className="mono">ENJOY ALL FEATURES</span>
-      </footer>
+      {currentPath !== '/' && (
+        <footer className="h-16 border-t border-[#2A2A28] bg-[#0E0E0E]/40 px-8 flex items-center justify-between text-[0.6rem] text-neutral-500 z-10">
+          <span className="mono">© 2026 FULL BACK //</span>
+          <span className="mono">ENJOY ALL FEATURES</span>
+        </footer>
+      )}
 
       {/* Match Detail Modal */}
       {matchDetail && (
