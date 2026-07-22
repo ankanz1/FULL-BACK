@@ -240,7 +240,6 @@ function StatCard({
   title,
   players,
   statKey,
-  statLabel,
   loading,
   error,
   onRetry,
@@ -248,7 +247,6 @@ function StatCard({
   title: string;
   players: PlayerEntry[];
   statKey: 'goals' | 'assists';
-  statLabel: string;
   loading: boolean;
   error: string;
   onRetry: () => void;
@@ -365,11 +363,7 @@ function NewsSection({
   );
 }
 
-export default function OverviewSection({
-  onNavigatePlayerStats,
-}: {
-  onNavigatePlayerStats?: () => void;
-}) {
+export default function OverviewSection() {
   const [knockoutMatches, setKnockoutMatches] = useState<MatchStats[]>([]);
   const [kmLoading, setKmLoading] = useState(true);
   const [kmError, setKmError] = useState('');
@@ -455,7 +449,6 @@ export default function OverviewSection({
             title="TOP SCORERS"
             players={playerStats?.top_scorers || []}
             statKey="goals"
-            statLabel="Goals"
             loading={psLoading}
             error={psError}
             onRetry={() => { setPsLoading(true); setPsError(''); }}
@@ -464,7 +457,6 @@ export default function OverviewSection({
             title="TOP ASSISTS"
             players={playerStats?.top_assists || []}
             statKey="assists"
-            statLabel="Assists"
             loading={psLoading}
             error={psError}
             onRetry={() => { setPsLoading(true); setPsError(''); }}

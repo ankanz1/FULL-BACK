@@ -121,13 +121,13 @@ export default function App() {
   const [matchDetailError, setMatchDetailError] = useState('');
   const [modalPrediction, setModalPrediction] = useState<any>(null);
   const [modalPredictionLoading, setModalPredictionLoading] = useState(false);
-  const [modalPredictionError, setModalPredictionError] = useState('');
+  const [, setModalPredictionError] = useState('');
   const [modalBreakdown, setModalBreakdown] = useState<any>(null);
   const [modalBreakdownLoading, setModalBreakdownLoading] = useState(false);
-  const [modalBreakdownError, setModalBreakdownError] = useState('');
+  const [, setModalBreakdownError] = useState('');
   const [modalHighlights, setModalHighlights] = useState<Highlight[]>([]);
   const [modalHighlightsLoading, setModalHighlightsLoading] = useState(false);
-  const [modalHighlightsError, setModalHighlightsError] = useState('');
+  const [, setModalHighlightsError] = useState('');
 
   // New dashboard states
   const [activeTab, setActiveTab] = useState<string>('overview'); // 'overview' | 'table' | 'fixtures' | 'player-stats' | 'team-stats' | 'tactics'
