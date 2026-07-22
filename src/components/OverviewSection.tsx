@@ -53,16 +53,16 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const WORLD_CUP_ALL_TIME_TOP_SCORERS = [
-  { rank: 1, name: 'Miroslav Klose', nationality: 'Germany', goals: 16, years: '2002–2014' },
-  { rank: 2, name: 'Ronaldo', nationality: 'Brazil', goals: 15, years: '1994–2006' },
-  { rank: 3, name: 'Gerd Müller', nationality: 'Germany', goals: 14, years: '1970–1974' },
-  { rank: 4, name: 'Just Fontaine', nationality: 'France', goals: 13, years: '1958' },
-  { rank: 5, name: 'Lionel Messi', nationality: 'Argentina', goals: 13, years: '2006–2022' },
-  { rank: 6, name: 'Kylian Mbappé', nationality: 'France', goals: 12, years: '2018–2022' },
+  { rank: 1, name: 'Lionel Messi', nationality: 'Argentina', goals: 19, years: '2006–2026' },
+  { rank: 2, name: 'Kylian Mbappé', nationality: 'France', goals: 18, years: '2018–2026' },
+  { rank: 3, name: 'Miroslav Klose', nationality: 'Germany', goals: 16, years: '2002–2014' },
+  { rank: 4, name: 'Ronaldo Nazário', nationality: 'Brazil', goals: 15, years: '1994–2006' },
+  { rank: 5, name: 'Gerd Müller', nationality: 'West Germany', goals: 14, years: '1970–1974' },
+  { rank: 6, name: 'Just Fontaine', nationality: 'France', goals: 13, years: '1958' },
   { rank: 7, name: 'Pelé', nationality: 'Brazil', goals: 12, years: '1958–1970' },
   { rank: 8, name: 'Sándor Kocsis', nationality: 'Hungary', goals: 11, years: '1954' },
   { rank: 9, name: 'Jürgen Klinsmann', nationality: 'Germany', goals: 11, years: '1990–1998' },
-  { rank: 10, name: 'Helmut Rahn', nationality: 'Germany', goals: 10, years: '1954–1958' },
+  { rank: 10, name: 'Helmut Rahn', nationality: 'West Germany', goals: 10, years: '1954–1958' },
 ];
 
 function formatDate(dateStr: string | undefined): string {
