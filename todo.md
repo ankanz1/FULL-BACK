@@ -126,6 +126,13 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [ ] ~~attempt a scoped-down Level 3 tactical snapshot~~ — CUT. Staying focused on hardening and Day 7 ship.
 - [x] **If behind schedule:** skip Level 3 entirely, spend today hardening what you have — fix bugs, handle edge cases (NaN serialization in /players, player_id format, CCTP integration, deploy configs)
 - [x] Fix sports data API: competition code `PL`→`WC`, rate-limited fetch layer, proper error surfacing, correct team ID mappings for form data
+  - [x] Fix `FOOTBALL_DATA_TEAM_IDS` in `main.py` — was using PL IDs for WC teams (e.g. USA→2167), now reuses correct `WC_TEAM_IDS` from `sports_api.py` (USA→771)
+  - [x] Fix `footballDataTeamIds` in `sportsDb.ts` — same issue, replaced with correct WC 2026 team IDs
+  - [x] Fix `/team-form/{team_id}` to accept numeric football-data.org IDs via reverse lookup
+  - [x] Expand `team_forms_db` fallback from 8 to 24 teams so non-API fallback works for all WC teams
+  - [x] Replace hardcoded match selector (`['M001', 'M002', 'M003']`) on analyst page with dynamic real match IDs from API
+  - [x] Update chat replies to show dynamic match/standings data instead of hardcoded mock strings
+  - [x] Fetch matches on analyst page load so real match IDs are available
 
 ---
 

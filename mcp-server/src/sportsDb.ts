@@ -79,40 +79,20 @@ export interface GroupStanding {
   points: number;
 }
 
-// Football Data.org Team ID Map
+// Football Data.org Team ID Map — World Cup 2026 team IDs
 const footballDataTeamIds: Record<string, number> = {
-  "USA": 2167,
-  "COL": 2183,
-  "GER": 2083,
-  "JPN": 2102,
-  "ARG": 2028,
-  "FRA": 2061,
-  "MAR": 2149,
-  "ESP": 2081,
-  "ITA": 2089,
-  "BRA": 2050,
-  "CRO": 2113,
-  "ENG": 2072,
-  "MUN": 66,
-  "ARS": 57,
-  "MCI": 65,
-  "LIV": 64,
-  "CHE": 61,
-  "TOT": 73,
-  "NEW": 67,
-  "AVL": 58,
-  "FUL": 63,
-  "BHA": 397,
-  "WHU": 563,
-  "CRY": 354,
-  "BOU": 1044,
-  "EVE": 62,
-  "BRE": 389,
-  "NFO": 351,
-  "LEI": 338,
-  "WOL": 76,
-  "SOU": 340,
-  "IPS": 349
+  "ALG": 778, "ARG": 762, "AUS": 779, "AUT": 816,
+  "BEL": 805, "BIH": 1060, "BRA": 764, "CAN": 828,
+  "CIV": 1935, "COD": 1934, "COL": 818, "CPV": 1930,
+  "CRO": 799, "CUW": 9460, "CZE": 798, "ECU": 791,
+  "EGY": 825, "ENG": 770, "ESP": 760, "FRA": 773,
+  "GER": 759, "GHA": 763, "HAI": 836, "IRN": 840,
+  "IRQ": 8062, "JOR": 8049, "JPN": 766, "KOR": 772,
+  "KSA": 801, "MAR": 815, "MEX": 769, "NED": 8601,
+  "NOR": 8872, "NZL": 783, "PAN": 1836, "PAR": 761,
+  "POR": 765, "QAT": 8030, "RSA": 774, "SCO": 8873,
+  "SEN": 804, "SUI": 788, "SWE": 792, "TUN": 802,
+  "TUR": 803, "URU": 758, "USA": 771, "UZB": 8070,
 };
 
 // Helper to get team flags
