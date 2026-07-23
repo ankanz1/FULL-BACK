@@ -10,7 +10,7 @@
 
 ## The name, decoded
 
-A full back is the defensive position that also drives the attack — covers your flank, then joins the run forward. That's the product: it pushes the analysis forward (AI-generated tactical insight most fans can't get anywhere else), freely accessible and ready on demand.
+A full back is the defensive position that also drives the attack — covers your flank, then joins the run forward. That's the product: it pushes the analysis forward (AI-generated tactical insight most fans can't get anywhere else), freely accessible and ready on demand
 
 ---
 
