@@ -571,9 +571,12 @@ export default function App() {
   useEffect(() => {
     if (currentPath === '/players' && selectedPlayer) {
       fetchClustering(selectedPlayer);
-    } else if (currentPath === '/analyst' && selectedMatchId) {
-      fetchPrediction(selectedMatchId);
-      fetchTacticalBreakdown(selectedMatchId);
+    } else if (currentPath === '/analyst') {
+      if (matches.length === 0) fetchMatches();
+      if (selectedMatchId) {
+        fetchPrediction(selectedMatchId);
+        fetchTacticalBreakdown(selectedMatchId);
+      }
     } else if (currentPath === '/highlights' && selectedMatchId) {
       fetchHighlights(selectedMatchId);
     }
@@ -607,8 +610,9 @@ export default function App() {
     if (activeTab === 'team-stats') {
       if (standings.length > 0) {
         standings.forEach(standing => {
-          if (!teamForms[standing.team.id]) {
-            fetchTeamForm(standing.team.id);
+          const teamKey = standing.team.code || standing.team.id;
+          if (!teamForms[teamKey]) {
+            fetchTeamForm(teamKey);
           }
         });
       } else {
@@ -689,9 +693,19 @@ export default function App() {
         if (cleanText.includes('hello') || cleanText.includes('hi')) {
           reply = "HELLO. STANDING BY FOR World Cup telemetry analysis. Ask about player clustering, outcome predictions, or post-match breakdowns.";
         } else if (cleanText.includes('match') || cleanText.includes('fixture') || cleanText.includes('score')) {
-          reply = "Match M001: USA 2 - 1 Colombia (Finished)\nMatch M002: Germany 3 - 1 Japan (Finished)\nMatch M003: Argentina 2 - 2 England (Finished)\n\nAsk 'predict match' or 'tactical breakdown' to invoke AI tools.";
+          if (matches.length > 0) {
+            const recent = [...matches].sort((a, b) => ((b.date||'') > (a.date||'') ? 1 : -1)).slice(0, 5);
+            reply = recent.map(m => `Match ${m.match_id}: ${m.home_team.name} ${m.score.home} - ${m.score.away} ${m.away_team.name} (${m.status})`).join('\n');
+            reply += "\n\nAsk 'predict match' or 'tactical breakdown' to invoke AI tools.";
+          } else {
+            reply = "Fetching match data... try asking for 'standings' or browse the Dashboard tab.";
+          }
         } else if (cleanText.includes('standing') || cleanText.includes('group')) {
-          reply = "Group A:\n1. Germany - 3 pts\n2. United States - 3 pts\n3. Colombia - 0 pts\n4. Japan - 0 pts\n\nGroup B:\n1. France - 3 pts\n2. Argentina - 1 pts\n3. England - 1 pts\n4. Morocco - 0 pts";
+          if (standings.length > 0) {
+            reply = standings.map((s: any) => `${s.position}. ${s.team.name} - ${s.points} pts`).join('\n');
+          } else {
+            reply = "Standings data not loaded yet. Try the Dashboard tab.";
+          }
         } else {
           reply = "UNDERSTOOD. Try asking for 'player similarity to Erling Haaland', 'predict match', or 'match standings'.";
         }
@@ -1202,9 +1216,10 @@ export default function App() {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {standings.map((standing) => {
-                        const teamForm = teamForms[standing.team.id];
+                        const teamKey = standing.team.code || standing.team.id;
+                        const teamForm = teamForms[teamKey];
                         return (
-                          <div key={standing.team.id} className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+                          <div key={teamKey} className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
                             <div className="flex items-center gap-3 mb-4">
                               <span className="text-3xl">{standing.team.flag}</span>
                               <div>
@@ -1299,17 +1314,21 @@ export default function App() {
               </div>
 
               {/* Match selector */}
-              <div className="flex items-center gap-2">
-                <span className="mono text-[0.6rem] text-neutral-500 uppercase tracking-widest mr-2">TARGET_ID:</span>
-                {['M001', 'M002', 'M003'].map(id => (
-                  <button
-                    key={id}
-                    onClick={() => setSelectedMatchId(id)}
-                    className={`mono text-[0.65rem] px-2.5 py-1 rounded border transition ${selectedMatchId === id ? 'border-[#D9622B] text-[#D9622B] bg-[#D9622B]/5' : 'border-neutral-800 text-neutral-400 hover:border-neutral-700'}`}
-                  >
-                    {id}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2 max-w-[50%] overflow-x-auto">
+                <span className="mono text-[0.6rem] text-neutral-500 uppercase tracking-widest mr-2 shrink-0">TARGET_ID:</span>
+                {matches.length === 0 ? (
+                  <span className="mono text-[0.6rem] text-neutral-600">Loading...</span>
+                ) : (
+                  [...matches].sort((a, b) => ((b.date||'') > (a.date||'') ? 1 : -1)).slice(0, 12).map(m => (
+                    <button
+                      key={m.match_id}
+                      onClick={() => setSelectedMatchId(m.match_id)}
+                      className={`mono text-[0.6rem] px-2 py-1 rounded border transition whitespace-nowrap ${selectedMatchId === m.match_id ? 'border-[#D9622B] text-[#D9622B] bg-[#D9622B]/5' : 'border-neutral-800 text-neutral-400 hover:border-neutral-700'}`}
+                    >
+                      {m.home_team.code} vs {m.away_team.code}
+                    </button>
+                  ))
+                )}
               </div>
             </div>
 
