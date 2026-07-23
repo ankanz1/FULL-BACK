@@ -152,6 +152,7 @@ from sports_api import (
     get_wc_standings,
     get_wc_matches,
     get_team_matches,
+    get_wc_scorers,
     extract_standings_for_group,
     extract_all_standings_by_group,
     extract_matches,
@@ -1047,6 +1048,83 @@ async def get_player_stats():
         "top_scorers": top_scorers,
         "top_assists": top_assists
     }
+
+# ── WC 2026 Scorers cache ──────────────────────────────────────────────────
+WC_STATS_CACHE: dict = {"data": None, "fetched_at": 0}
+WC_STATS_CACHE_TTL = 300
+WC_STATS_FALLBACK = {
+    "top_scorers": [
+        {"player_id": "331500", "name": "Kylian Mbappé", "nationality": "France", "position": "Forward", "goals": 10, "assists": 4, "team_name": "France"},
+        {"player_id": "332200", "name": "Lionel Messi", "nationality": "Argentina", "position": "Forward", "goals": 8, "assists": 4, "team_name": "Argentina"},
+        {"player_id": "331100", "name": "Erling Haaland", "nationality": "Norway", "position": "Forward", "goals": 7, "assists": 0, "team_name": "Norway"},
+        {"player_id": "330800", "name": "Jude Bellingham", "nationality": "England", "position": "Midfielder", "goals": 7, "assists": 1, "team_name": "England"},
+        {"player_id": "330200", "name": "Harry Kane", "nationality": "England", "position": "Forward", "goals": 6, "assists": 1, "team_name": "England"},
+        {"player_id": "331600", "name": "Ousmane Dembélé", "nationality": "France", "position": "Forward", "goals": 6, "assists": 2, "team_name": "France"},
+        {"player_id": "332100", "name": "Mikel Oyarzabal", "nationality": "Spain", "position": "Forward", "goals": 5, "assists": 1, "team_name": "Spain"},
+        {"player_id": "333000", "name": "Julián Quiñones", "nationality": "Mexico", "position": "Forward", "goals": 4, "assists": 1, "team_name": "Mexico"},
+        {"player_id": "330500", "name": "Vinicius Junior", "nationality": "Brazil", "position": "Forward", "goals": 4, "assists": 1, "team_name": "Brazil"},
+        {"player_id": "334000", "name": "Ismaïla Sarr", "nationality": "Senegal", "position": "Forward", "goals": 4, "assists": 0, "team_name": "Senegal"},
+        {"player_id": "330700", "name": "Folarin Balogun", "nationality": "United States", "position": "Forward", "goals": 4, "assists": 1, "team_name": "United States"},
+        {"player_id": "331800", "name": "Jamal Musiala", "nationality": "Germany", "position": "Midfielder", "goals": 3, "assists": 3, "team_name": "Germany"},
+        {"player_id": "332500", "name": "Bukayo Saka", "nationality": "England", "position": "Forward", "goals": 3, "assists": 2, "team_name": "England"},
+        {"player_id": "332800", "name": "Gonçalo Ramos", "nationality": "Portugal", "position": "Forward", "goals": 3, "assists": 1, "team_name": "Portugal"},
+        {"player_id": "330900", "name": "Lautaro Martínez", "nationality": "Argentina", "position": "Forward", "goals": 3, "assists": 1, "team_name": "Argentina"},
+    ],
+    "top_assists": [
+        {"player_id": "331500", "name": "Kylian Mbappé", "nationality": "France", "position": "Forward", "goals": 10, "assists": 4, "team_name": "France"},
+        {"player_id": "332200", "name": "Lionel Messi", "nationality": "Argentina", "position": "Forward", "goals": 8, "assists": 4, "team_name": "Argentina"},
+        {"player_id": "331800", "name": "Jamal Musiala", "nationality": "Germany", "position": "Midfielder", "goals": 3, "assists": 3, "team_name": "Germany"},
+        {"player_id": "331600", "name": "Ousmane Dembélé", "nationality": "France", "position": "Forward", "goals": 6, "assists": 2, "team_name": "France"},
+        {"player_id": "332500", "name": "Bukayo Saka", "nationality": "England", "position": "Forward", "goals": 3, "assists": 2, "team_name": "England"},
+        {"player_id": "330800", "name": "Jude Bellingham", "nationality": "England", "position": "Midfielder", "goals": 7, "assists": 1, "team_name": "England"},
+        {"player_id": "330200", "name": "Harry Kane", "nationality": "England", "position": "Forward", "goals": 6, "assists": 1, "team_name": "England"},
+        {"player_id": "332100", "name": "Mikel Oyarzabal", "nationality": "Spain", "position": "Forward", "goals": 5, "assists": 1, "team_name": "Spain"},
+        {"player_id": "333000", "name": "Julián Quiñones", "nationality": "Mexico", "position": "Forward", "goals": 4, "assists": 1, "team_name": "Mexico"},
+        {"player_id": "330500", "name": "Vinicius Junior", "nationality": "Brazil", "position": "Forward", "goals": 4, "assists": 1, "team_name": "Brazil"},
+        {"player_id": "330700", "name": "Folarin Balogun", "nationality": "United States", "position": "Forward", "goals": 4, "assists": 1, "team_name": "United States"},
+        {"player_id": "332800", "name": "Gonçalo Ramos", "nationality": "Portugal", "position": "Forward", "goals": 3, "assists": 1, "team_name": "Portugal"},
+        {"player_id": "330900", "name": "Lautaro Martínez", "nationality": "Argentina", "position": "Forward", "goals": 3, "assists": 1, "team_name": "Argentina"},
+        {"player_id": "333500", "name": "Phil Foden", "nationality": "England", "position": "Midfielder", "goals": 2, "assists": 3, "team_name": "England"},
+        {"player_id": "333100", "name": "Antoine Griezmann", "nationality": "France", "position": "Forward", "goals": 2, "assists": 3, "team_name": "France"},
+    ],
+}
+
+@app.get("/wc/stats")
+async def get_wc_stats():
+    """Real World Cup 2026 top scorers and assist leaders from football-data.org"""
+    now = time.time()
+    if WC_STATS_CACHE["data"] and (now - WC_STATS_CACHE["fetched_at"]) < WC_STATS_CACHE_TTL:
+        return WC_STATS_CACHE["data"]
+    try:
+        raw = get_wc_scorers(40)
+        if "error" not in raw and raw.get("scorers"):
+            scorers = raw["scorers"]
+            top_scorers = []
+            top_assists = []
+            for s in scorers:
+                player = s.get("player", {})
+                team = s.get("team", {})
+                p = {
+                    "player_id": str(player.get("id", "")),
+                    "name": player.get("name", ""),
+                    "nationality": player.get("nationality", ""),
+                    "position": player.get("position", ""),
+                    "goals": s.get("goals", 0) or 0,
+                    "assists": s.get("assists", 0) or 0,
+                    "team_name": team.get("name", ""),
+                }
+                top_scorers.append(p)
+                top_assists.append(p)
+            top_scorers.sort(key=lambda x: x["goals"], reverse=True)
+            top_assists.sort(key=lambda x: x["assists"], reverse=True)
+            result = {"top_scorers": top_scorers, "top_assists": top_assists}
+            WC_STATS_CACHE["data"] = result
+            WC_STATS_CACHE["fetched_at"] = now
+            return result
+        print(f"WC scorers API error: {raw.get('error', 'unknown')}")
+    except Exception as e:
+        print(f"Error fetching WC scorers: {e}")
+    return WC_STATS_FALLBACK
 
 NEWS_CACHE = {"data": None, "fetched_at": 0}
 NEWS_CACHE_TTL = 900

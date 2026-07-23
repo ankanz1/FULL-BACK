@@ -128,6 +128,16 @@ def get_wc_matches() -> list[dict]:
         _set_cache(cache_key, data)
     return data
 
+def get_wc_scorers(limit: int = 40) -> dict:
+    cache_key = f"wc_scorers_{limit}"
+    cached = _cached(cache_key, "matches")
+    if cached:
+        return cached
+    data = _api_get(f"/competitions/{WC_COMPETITION}/scorers?limit={limit}")
+    if "error" not in data:
+        _set_cache(cache_key, data)
+    return data
+
 def get_team_matches(team_id: int) -> dict:
     cache_key = f"team_matches_{team_id}"
     cached = _cached(cache_key, "team_matches")

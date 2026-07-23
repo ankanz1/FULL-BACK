@@ -443,8 +443,8 @@ export default function App() {
     setDashboardLoading(prev => ({ ...prev, [key]: true }));
     setDashboardError(prev => ({ ...prev, [key]: '' }));
     try {
-      const res = await fetch(`${API_BASE}/player-stats`);
-      if (!res.ok) throw new Error('Failed to fetch player stats');
+      const res = await fetch(`${API_BASE}/wc/stats`);
+      if (!res.ok) throw new Error('Failed to fetch WC player stats');
       const data = await res.json();
       setPlayerStats(data);
     } catch (e) {

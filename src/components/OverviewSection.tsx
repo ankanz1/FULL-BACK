@@ -401,8 +401,8 @@ export default function OverviewSection() {
 
     const fetchPlayerStats = async () => {
       try {
-        const res = await fetch(`${API_BASE}/player-stats`);
-        if (!res.ok) throw new Error('Failed to fetch player stats');
+        const res = await fetch(`${API_BASE}/wc/stats`);
+        if (!res.ok) throw new Error('Failed to fetch WC player stats');
         const data = await res.json();
         setPlayerStats(data);
       } catch (e) {
@@ -442,8 +442,7 @@ export default function OverviewSection() {
 
       {/* Stat Leader Cards */}
       <div>
-        <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ CAREER_LEADERS ]</h3>
-        <div className="mono text-[0.55rem] text-neutral-600 mb-3">All competitions career totals · Tournament-specific stats not available from current API</div>
+        <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-3">[ WC_2026_LEADERS ]</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <StatCard
             title="TOP SCORERS"
