@@ -673,10 +673,12 @@ class HealthResponse(BaseModel):
     status: str
     service: str
 
+@app.head("/health")
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     return HealthResponse(status="healthy", service="fullback-python-service")
 
+@app.head("/")
 @app.get("/")
 async def root():
     return {
