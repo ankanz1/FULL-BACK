@@ -93,7 +93,7 @@ interface PlayerStats {
 
 export default function App() {
   // Custom router state
-  const [currentPath, setCurrentPath] = useState('/'); // '/' | '/dashboard' | '/analyst' | '/players' | '/highlights' | '/developers'
+  const [currentPath, setCurrentPath] = useState('/'); // '/' | '/dashboard' | '/analyst' | '/players' | '/highlights'
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [, setLoading] = useState(false);
   const [, setProgress] = useState(0);
@@ -785,13 +785,6 @@ export default function App() {
             >
               HIGHLIGHTS
               {currentPath === '/highlights' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
-            </button>
-            <button
-              onClick={() => handleNavigate('/developers')}
-              className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/developers' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
-            >
-              DEVELOPERS
-              {currentPath === '/developers' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
             </button>
           </nav>
         </header>
@@ -1797,92 +1790,6 @@ export default function App() {
                   </div>
                 );
               })()}
-            </div>
-          </div>
-        )}
-
-        {/* 6. DEVELOPERS DOCUMENTATION PATH */}
-        {currentPath === '/developers' && (
-          <div className="p-8 max-w-6xl w-full mx-auto space-y-8 animate-fade-in flex-grow">
-            <div className="border-b border-[#2A2A28] pb-4 flex justify-between items-end">
-              <div>
-                <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ AGENT_INTEGRATION_SDK ]</span>
-                <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">DEVELOPER PORTAL</h1>
-              </div>
-              <span className="mono text-[0.6rem] text-neutral-500">SPECIFICATION: MCP v1.0 &amp; Open Skills</span>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-              {/* Instructions side panel */}
-              <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 space-y-6">
-                <div>
-                  <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ AGENT_SKILL_INSTALL ]</h3>
-                  <p className="mono text-[0.65rem] text-neutral-400 leading-relaxed mb-4">
-                    Install the packaged skill into Claude Code or other compatible agent environments in one command.
-                  </p>
-
-                  <div className="bg-[#0E0E0E] border border-[#2A2A28] p-3 rounded text-[0.65rem] mono text-[#D9622B] font-bold select-all">
-                    npx skills add worldcup-analyst
-                  </div>
-                </div>
-
-                <div className="border-t border-[#2A2A28] pt-6 space-y-2">
-                  <div className="text-[0.6rem] text-neutral-500 uppercase tracking-widest font-semibold mb-2">INTEGRATION_STEPS</div>
-                  <ol className="list-decimal pl-4 text-[0.65rem] text-neutral-400 space-y-1.5 mono">
-                    <li>Add the skill package.</li>
-                    <li>Set EVM/SVM private key variables.</li>
-                    <li>Query the model context tools directly.</li>
-                  </ol>
-                </div>
-              </div>
-
-              {/* Code blocks reference */}
-              <div className="lg:col-span-2 border border-[#2A2A28] bg-[#171715]/40 rounded p-6 space-y-6">
-                <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ CLAUDE_DESKTOP_CONFIG_TEMPLATE ]</h3>
-
-                <div className="bg-[#0E0E0E] border border-[#2A2A28] p-5 rounded font-mono text-[0.65rem] text-neutral-300 overflow-x-auto">
-                  <pre>{`{
-  "mcpServers": {
-    "fullback-analyst": {
-      "command": "npx",
-      "args": ["-y", "fullback-mcp-server"],
-      "env": {
-        "EVM_PRIVATE_KEY": "0x9ed482fC5A356964b0405D...",
-        "RESOURCE_SERVER_URL": "${API_BASE}"
-      }
-    }
-  }
-}`}</pre>
-                </div>
-
-                <div className="border-t border-[#2A2A28] pt-6">
-                  <div className="mono text-[0.6rem] text-neutral-500 mb-2 uppercase">AVAILABLE_MCP_SCHEMAS:</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-[0.65rem] mono">
-                    <div className="border border-neutral-900 p-3 rounded">
-                      <div className="text-[#D9622B] font-bold">predict_outcome(match_id)</div>
-                      <div className="text-neutral-500 mt-1">Gated: 0.05 USDC</div>
-                    </div>
-                    <div className="border border-neutral-900 p-3 rounded">
-                      <div className="text-[#D9622B] font-bold">tactical_breakdown(match_id)</div>
-                      <div className="text-neutral-500 mt-1">Gated: 0.10 USDC</div>
-                    </div>
-                    <div className="border border-neutral-900 p-3 rounded">
-                      <div className="text-[#D9622B] font-bold">player_style_cluster(player_id)</div>
-                      <div className="text-neutral-500 mt-1">Gated: 0.01 USDC</div>
-                    </div>
-                    <div className="border border-neutral-900 p-3 rounded">
-                      <div className="text-[#D9622B] font-bold">generate_highlights(match_id)</div>
-                      <div className="text-neutral-500 mt-1">Gated: 0.08 USDC</div>
-                    </div>
-                    <div className="border border-neutral-900 p-3 rounded">
-                      <div className="text-[#D9622B] font-bold">tactical_snapshot()</div>
-                      <div className="text-neutral-500 mt-1">Free — pre-loaded clip analysis</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
             </div>
           </div>
         )}
