@@ -13,31 +13,33 @@ def load_env():
 
 load_env()
 
-import pandas as pd
-import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
-from sklearn.decomposition import PCA
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(_SCRIPT_DIR, "data", "players_stats.csv")
 
-# Global cache for processed data
 processed_data: Dict[str, Any] = {}
 _data_ready = False
 
 def process_clustering():
     global _data_ready
+    if _data_ready:
+        return
     if not os.path.exists(CSV_PATH):
         print(f"Player stats dataset not found at {CSV_PATH}")
         return
+
+    import pandas as pd
+    import numpy as np
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+    from sklearn.decomposition import PCA
 
     df = pd.read_csv(CSV_PATH)
     df = df[df["position"] != "Goalkeeper"].copy()
@@ -47,11 +49,12 @@ def process_clustering():
         if col not in df.columns:
             df[col] = 0
 
-    df["goals_per_90"] = (df["goals"] / df["minutes_played"]).replace([np.inf, -np.inf], 0).fillna(0) * 90
-    df["assists_per_90"] = (df["assists"] / df["minutes_played"]).replace([np.inf, -np.inf], 0).fillna(0) * 90
-    df["key_passes_per_90"] = (df["key_passes"] / df["minutes_played"]).replace([np.inf, -np.inf], 0).fillna(0) * 90
-    df["tackles_per_90"] = (df["tackles"] / df["minutes_played"]).replace([np.inf, -np.inf], 0).fillna(0) * 90
-    df["interceptions_per_90"] = (df["interceptions"] / df["minutes_played"]).replace([np.inf, -np.inf], 0).fillna(0) * 90
+    nf = np.inf
+    df["goals_per_90"] = (df["goals"] / df["minutes_played"]).replace([nf, -nf], 0).fillna(0) * 90
+    df["assists_per_90"] = (df["assists"] / df["minutes_played"]).replace([nf, -nf], 0).fillna(0) * 90
+    df["key_passes_per_90"] = (df["key_passes"] / df["minutes_played"]).replace([nf, -nf], 0).fillna(0) * 90
+    df["tackles_per_90"] = (df["tackles"] / df["minutes_played"]).replace([nf, -nf], 0).fillna(0) * 90
+    df["interceptions_per_90"] = (df["interceptions"] / df["minutes_played"]).replace([nf, -nf], 0).fillna(0) * 90
     df["pass_accuracy"] = df.get("pass_accuracy", pd.Series(75.0, index=df.index)).fillna(75.0)
 
     features = [
@@ -123,16 +126,11 @@ def process_clustering():
     processed_data["archetypes"] = cluster_labels
     _data_ready = True
 
-    print(f"Clustering model loaded on {len(df)} outfield players. Best K={best_k}, Silhouette: {sil_score:.3f}")
-    print(f"Features: {features}")
-    print(f"Archetypes: {cluster_labels}")
+    print(f"Clustering loaded on {len(df)} outfield players. Best K={best_k}, Silhouette: {sil_score:.3f}")
     print(f"Cluster sizes:\n{df['cluster'].value_counts().sort_index()}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import threading
-    t = threading.Thread(target=process_clustering, daemon=True)
-    t.start()
     yield
 
 app = FastAPI(title="FULL BACK Data Science Service", version="1.0.0", lifespan=lifespan)
