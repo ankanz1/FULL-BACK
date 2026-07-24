@@ -37,6 +37,7 @@ __pycache__/
 python-service/.venv/
 python-service/__pycache__/
 python-service/data/
+!python-service/data/players_stats.csv
 mcp-server/dist/
 mcp-server/node_modules/
 
