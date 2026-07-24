@@ -7,6 +7,6 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "env": {
-    "VITE_PYTHON_SERVICE_URL": "https://fullback-api.onrender.com"
+    "VITE_PYTHON_SERVICE_URL": "https://full-back-production.up.railway.app"
   }
 }
