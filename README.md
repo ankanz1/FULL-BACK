@@ -208,7 +208,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 - Live match data: [football-data.org](https://www.football-data.org) / API-Football
 - Player stats for clustering: [Transfermarkt data via Kaggle](https://www.kaggle.com/datasets/davidcariboo/player-scores)
 - Historical results for prediction model: [International football results 1872–2017, Kaggle](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017)
-- Sample match footage: sourced under free-use license from Pexels/Pixabay for demo/testing purposes only
+- Sample match footage: sourced under free-use license from google for demo/testing purposes only
 
 ## Known limitations
 
