@@ -6,9 +6,9 @@
 
 ---
 
-**A complete AI-powered World Cup platform — live data, player analytics, match predictions, and a conversational assistant, all in one place.**
+**An AI-powered World Cup platform — live scores, player analytics, match predictions, tactical breakdowns, and a conversational agent, all in one place.**
 
-FULL BACK lets a fan (or any AI agent) ask natural-language questions about the World Cup — live scores, standings, player style comparisons, match predictions, tactical breakdowns — and get answers grounded in real data, not guesses. Everything is free to use, no wallet or payment required.
+FULL BACK lets a fan ask natural-language questions about the World Cup — live scores, standings, player style comparisons, match predictions, tactical breakdowns — and get answers grounded in real data, not guesses. Everything is free to use, no wallet or payment required.
 
 ---
 
@@ -30,12 +30,9 @@ FULL BACK lets a fan (or any AI agent) ask natural-language questions about the 
 
 ## What this is
 
-FULL BACK is built around one core idea: an **MCP server** exposes a set of World Cup analysis tools, and those same tools are usable in two ways —
+FULL BACK is an AI-powered World Cup companion: a dashboard for live data and analytics, plus a conversational Analyst chat where an LLM decides what information it needs and calls the backend API to get it — rather than answering World Cup questions from memory.
 
-1. Through a **fan-facing dashboard and chat interface** on the website
-2. Through any **AI agent** that installs the accompanying **Agent Skill**, giving it the same World Cup expertise Claude Code (or any other MCP-compatible agent) can call directly
-
-Every tool is free and open — no subscriptions, no per-query payment, no wallet.
+Every feature is free to use — no subscriptions, no per-query payment, no wallet.
 
 ## Features
 
@@ -45,16 +42,16 @@ Every tool is free and open — no subscriptions, no per-query payment, no walle
 - **Fixtures** — match list by date, live score updates for in-progress matches
 - **Player stats** — top scorers, top assists, linked into player style clustering
 - **Team stats** — team form (recent results, goals for/against)
-- **Prediction** — match win/draw/loss predictor and full tournament-odds simulation
+- **Prediction** — match win/draw/loss predictor and full tournament-odds simulation, powered by an Elo + Dixon-Coles Poisson + Monte Carlo model
 
 ### AI Analyst chat
-A conversational interface where a fan asks a question and an LLM agent decides which MCP tool to call, executes it, and answers using the real result — never a hallucinated stat.
+A conversational interface where a fan asks a question and an LLM (Claude API) determines what data it needs, calls the backend API to retrieve it, and answers using the real result rather than a hallucinated stat.
 
 ### Data-science features
-- **Player style clustering** — K-Means clustering of players into playing styles based on historical per-90 stats (Transfermarkt data via Kaggle)
+- **Player style clustering** — K-Means clustering of players into playing styles based on historical per-90 stats (Transfermarkt data via Kaggle), precomputed and served from CSV
 - **Highlight detection** — automatic detection of exciting moments in match audio via loudness-peak analysis
 - **Tactical snapshot** — player/ball detection and tracking from match footage, with a zone-based tactical read (not precise pitch-coordinate mapping — see [Known limitations](#known-limitations))
-- **Match & tournament prediction** — Elo team ratings + Dixon-Coles Poisson expected-goals model + Monte Carlo simulation, trained on ~150 years of international results
+- **Match & tournament prediction** — Elo team ratings + Dixon-Coles Poisson expected-goals model + Monte Carlo simulation, trained on ~150 years of international results, precomputed and served from CSV
 
 ## Architecture
 
@@ -65,20 +62,19 @@ graph TD
         Chat["Analyst chat UI"]
     end
 
-    subgraph Agent["LLM Agent Layer"]
-        LLM["LLM tool-calling loop\n(Claude API)"]
+    subgraph LLM["LLM Layer"]
+        Claude["Claude API\n(function-calling against the backend API)"]
     end
 
-    subgraph MCP["MCP Server — Node/TypeScript"]
-        ToolsFree["get_match_stats\nget_team_form\nget_standings"]
-        ToolsData["player_style_cluster\ngenerate_highlights\ntactical_snapshot\npredict_match\nsimulate_tournament"]
+    subgraph Backend["Backend API — FastAPI"]
+        LiveEndpoints["/matches, /standings, /fixtures\n(live data endpoints)"]
+        DataEndpoints["/cluster, /predict, /highlights, /tactics\n(precomputed data-science endpoints)"]
     end
 
-    subgraph Python["Python Service — FastAPI"]
-        Clustering["Player clustering\n(K-Means, precomputed)"]
-        Highlights["Highlight detection\n(librosa + moviepy)"]
-        Tactical["Tactical snapshot\n(YOLOv8 + ByteTrack, precomputed)"]
-        Prediction["Elo + Dixon-Coles + Monte Carlo\n(precomputed)"]
+    subgraph Precompute["Precomputed pipelines (run once, offline)"]
+        Clustering["Player clustering\n(K-Means)"]
+        Prediction["Elo + Dixon-Coles + Monte Carlo"]
+        Tactical["Tactical snapshot\n(YOLOv8 + ByteTrack)"]
     end
 
     subgraph External["External data"]
@@ -86,63 +82,56 @@ graph TD
         Kaggle["Kaggle datasets\n(player stats, historical results)"]
     end
 
-    subgraph Skill["Agent Skill"]
-        WorldCupSkill["worldcup-analyst skill\ninstallable by any MCP-compatible agent"]
-    end
-
-    Dashboard --> ToolsFree
-    Dashboard --> ToolsData
-    Chat --> LLM
-    LLM --> ToolsFree
-    LLM --> ToolsData
-    ToolsFree --> SportsAPI
-    ToolsData --> Python
-    Clustering --> Kaggle
-    Prediction --> Kaggle
-    Skill -.->|installs & calls| MCP
+    Dashboard --> LiveEndpoints
+    Dashboard --> DataEndpoints
+    Chat --> Claude
+    Claude --> LiveEndpoints
+    Claude --> DataEndpoints
+    LiveEndpoints --> SportsAPI
+    Precompute --> Kaggle
+    DataEndpoints --> Precompute
 ```
 
 **How it works end to end:**
 1. A fan interacts with the dashboard directly, or asks the Analyst chat a free-form question
-2. The chat's LLM agent decides whether it needs live data — if so, it calls the relevant MCP tool rather than guessing
-3. Simple tools (scores, standings, form) call the sports data API directly
-4. Data-science tools (clustering, highlights, tactical snapshot, prediction) are backed by a Python service, most of which run as **one-time precomputed pipelines** rather than live-per-request computation
-5. The same MCP server is installable as an **Agent Skill** by any other AI agent, giving it identical World Cup capabilities outside this website entirely
+2. The chat's LLM decides whether it needs data — if so, it calls the backend API rather than guessing
+3. Live endpoints (scores, standings, fixtures) call the sports data API directly
+4. Data-science endpoints (clustering, highlights, tactical snapshot, prediction) read from **precomputed CSV/JSON files**, generated by one-time offline pipelines — nothing here is computed live per request
+
+> **Note on architecture:** this project does not currently implement the Model Context Protocol (MCP) or an installable Agent Skill. The LLM integration is direct API function-calling from the Analyst chat to this project's own backend, not a standalone MCP server that other agents could independently connect to. See [Injective technologies used](#injective-technologies-used) below.
 
 ## Tech stack
 
 - **Frontend:** Next.js, TypeScript, Tailwind
-- **MCP server:** Node.js, TypeScript, `@modelcontextprotocol/sdk`
-- **Data-science service:** Python, FastAPI
-- **LLM:** Claude API (tool-calling)
+- **Backend API:** Python, FastAPI
+- **LLM:** Claude API (function-calling)
 - **ML/data libraries:** pandas, scikit-learn, librosa, moviepy, ultralytics (YOLOv8), supervision (ByteTrack), OpenCV
-- **Deployment:** Vercel (frontend), Railway (backend services)
+- **Deployment:** Vercel (frontend), Railway (backend)
 
 ## Injective technologies used
 
-This project was originally built for The Injective Global Cup hackathon, which asked entrants to meaningfully use x402, CCTP, MCP Server, and Agent Skills.
+This project was originally started for The Injective Global Cup hackathon, which asked entrants to meaningfully use x402, CCTP, MCP Server, and Agent Skills.
 
-- **MCP Server** — ✅ core to the entire architecture, as described above
-- **Agent Skills** — ✅ the whole tool set is packaged as an installable skill any MCP-compatible agent can use
-- **x402 / CCTP** — initially integrated for cross-chain micropayments gating premium tools, but descoped during development due to reliability issues under time constraints. Rather than ship a broken payment flow, every tool was made freely accessible instead. This is a deliberate engineering tradeoff, not an oversight.
+- **MCP Server** — ❌ not implemented. The original plan called for wrapping the backend's tools in an actual MCP server; in the final build, the LLM integration calls the backend API directly instead.
+- **Agent Skills** — ❌ not implemented. This was designed to expose the MCP server's tools to other agents, so without an MCP server, there's currently nothing for a skill to wrap.
+- **x402 / CCTP** — descoped during development due to reliability issues under time constraints. Every feature is freely accessible instead of payment-gated.
+
+This project ended up as a fully-functional AI-powered World Cup platform, but does not currently fulfill the hackathon's specific Injective-technology integration requirements.
 
 ## Project structure
 
 ```
 .
-├── frontend/                 # Next.js app
-│   ├── app/                  # Dashboard tabs, Analyst chat, Prediction section
-│   └── components/           # Shared UI components
-├── mcp-server/                # Node/TypeScript MCP server
-│   └── src/
-│       └── index.ts          # Tool registrations
-├── python-service/            # FastAPI data-science service
+├── frontend/                       # Next.js app
+│   ├── app/                        # Dashboard tabs, Analyst chat, Prediction section
+│   └── components/                 # Shared UI components
+├── backend/                        # FastAPI backend
 │   ├── main.py
-│   ├── build_clusters.py     # One-time: player clustering
-│   ├── highlights.py          # Highlight detection
-│   ├── tactical_snapshot.py   # One-time: tactical analysis
-│   ├── build_elo_ratings.py  # One-time: Elo ratings from historical data
-│   └── public/                # Precomputed static outputs (images, JSON)
+│   ├── build_clusters.py           # One-time: player clustering
+│   ├── highlights.py               # Highlight detection
+│   ├── tactical_snapshot.py        # One-time: tactical analysis
+│   ├── build_elo_ratings.py        # One-time: Elo ratings from historical data
+│   └── public/                     # Precomputed static outputs (CSV/JSON, images)
 └── README.md
 ```
 
@@ -166,27 +155,14 @@ cd frontend
 npm install
 npm run dev
 
-# MCP server
-cd ../mcp-server
-npm install
-npm run dev
-
-# Python service
-cd ../python-service
+# Backend
+cd ../backend
 pip install -r requirements.txt --break-system-packages
 # Run one-time precompute scripts before starting the API:
 python build_clusters.py
 python build_elo_ratings.py
 uvicorn main:app --reload
 ```
-
-### Installing the Agent Skill
-
-```bash
-# Copy the skill into your agent's skills directory
-cp -r worldcup-analyst-skill ~/.claude/skills/
-```
-Refer to your MCP client's documentation for exact skill installation steps.
 
 ## Environment variables
 
@@ -208,12 +184,12 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 - Live match data: [football-data.org](https://www.football-data.org) / API-Football
 - Player stats for clustering: [Transfermarkt data via Kaggle](https://www.kaggle.com/datasets/davidcariboo/player-scores)
 - Historical results for prediction model: [International football results 1872–2017, Kaggle](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017)
-- Sample match footage: sourced under free-use license from google for demo/testing purposes only
+- Sample match footage: sourced under free-use license from Pexels/Pixabay for demo/testing purposes only
 
 ## Known limitations
 
+- **No MCP server or Agent Skill** — see [Injective technologies used](#injective-technologies-used)
 - **Tactical snapshot** uses screen-position zone estimates (defensive/middle/attacking thirds), not precise pitch-coordinate homography — the source footage didn't contain enough clear landmark points for a reliable metric transform, so the output is intentionally descriptive rather than presenting false precision
 - **All-time top scorers** (if included in Overview) is a static, manually-sourced list, not live-computed — it can go stale if a current player breaks the record mid-tournament
 - **Prediction model** confidence varies by team — nations with sparse historical match data in the training set will have less reliable Elo ratings than heavily-represented ones
 - x402/CCTP payment infrastructure was descoped; see [Injective technologies used](#injective-technologies-used)
-
