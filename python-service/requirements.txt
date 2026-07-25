@@ -9,5 +9,6 @@ scipy
 ultralytics
 opencv-python
 mplsoccer
+supervision
 feedparser
 requests

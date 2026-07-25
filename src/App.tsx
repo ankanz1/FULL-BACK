@@ -140,6 +140,11 @@ export default function App() {
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotError, setSnapshotError] = useState('');
 
+  // Tactical analyst state
+  const [analystData, setAnalystData] = useState<{ image_url?: string; caption?: string; formations?: Record<string, string> } | null>(null);
+  const [analystLoading, setAnalystLoading] = useState(false);
+  const [analystError, setAnalystError] = useState('');
+
   // Prediction states
   const [allTeams, setAllTeams] = useState<string[]>([]);
   const [predHomeTeam, setPredHomeTeam] = useState('');
@@ -161,7 +166,7 @@ export default function App() {
 
   // Chat states
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'assistant' | 'system'; text: string; imageUrl?: string }>>([
-    { sender: 'assistant', text: "HELLO. I AM FULL BACK. STANDING BY FOR MATCH DATA OR TACTICAL ANALYSIS INTERROGATIONS. HOW CAN I BACK YOU TODAY?" }
+    { sender: 'assistant', text: "HELLO. I AM FULL BACK. STANDING BY FOR TACTICAL ANALYSIS OR MATCH DATA INTERROGATIONS. HOW CAN I BACK YOU TODAY?" }
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
@@ -509,6 +514,21 @@ export default function App() {
     }
   };
 
+  const fetchAnalystTactical = async () => {
+    setAnalystLoading(true);
+    setAnalystError('');
+    try {
+      const res = await fetch(`${API_BASE}/analyst/tactical`);
+      if (!res.ok) throw new Error('Failed to fetch tactical analysis');
+      const data = await res.json();
+      setAnalystData(data);
+    } catch (e) {
+      setAnalystError((e as Error).message);
+    } finally {
+      setAnalystLoading(false);
+    }
+  };
+
   const authenticatedFetch = async (url: string): Promise<any> => {
     const res = await fetch(url);
     if (!res.ok) {
@@ -644,7 +664,7 @@ export default function App() {
     } else if (currentPath === '/analyst') {
       if (matches.length === 0) fetchMatches();
       if (selectedMatchId) {
-        fetchPrediction(selectedMatchId);
+        fetchAnalystTactical();
         fetchTacticalBreakdown(selectedMatchId);
       }
     } else if (currentPath === '/highlights' && selectedMatchId) {
@@ -711,26 +731,6 @@ export default function App() {
         toolName = 'player_style_cluster';
         const targetPlayer = players.find(p => cleanText.includes(p.name.toLowerCase())) || players[0];
         path = `/cluster/player/${targetPlayer.player_id}`;
-      } else if (cleanText.includes('tournament') || cleanText.includes('who will win the world cup') || cleanText.includes('world cup winner') || cleanText.includes('champion odds') || cleanText.includes('title odds')) {
-        toolName = 'simulate_tournament';
-        path = `/predict/tournament`;
-      } else if ((cleanText.includes('predict') || cleanText.includes('prediction') || cleanText.includes('who will win') || cleanText.includes('vs')) && !cleanText.includes('tournament')) {
-        // Try to extract team names for match prediction
-        const teams_split = cleanText.split(/\bvs\b|\bversus\b|\bagainst\b/);
-        if (teams_split.length >= 2) {
-          const potential_home = teams_split[0].replace(/predict|prediction|who will win|who wins|[?,!.]/g, '').trim();
-          const potential_away = teams_split[1].replace(/[?,!.]/g, '').trim();
-          const matched_home = allTeams.find(t => t.toLowerCase().includes(potential_home) || potential_home.includes(t.toLowerCase()));
-          const matched_away = allTeams.find(t => t.toLowerCase().includes(potential_away) || potential_away.includes(t.toLowerCase()));
-          if (matched_home && matched_away) {
-            toolName = 'predict_match';
-            path = `/predict/match?home_team=${encodeURIComponent(matched_home)}&away_team=${encodeURIComponent(matched_away)}`;
-          }
-        }
-        if (!toolName) {
-          toolName = 'predict_outcome';
-          path = `/predict/match/${selectedMatchId}`;
-        }
       } else if (cleanText.includes('breakdown') || cleanText.includes('tactical') || cleanText.includes('tactics')) {
         toolName = 'tactical_breakdown';
         path = `/tactical/match/${selectedMatchId}`;
@@ -759,29 +759,10 @@ export default function App() {
             result.similar_players.forEach((p: any) => {
               reply += `• ${p.name} (${p.position}) — Value: €${p.market_value_m}M (Dist: ${p.similarity_distance.toFixed(2)})\n`;
             });
-          } else if (toolName === 'predict_outcome') {
-            reply += `AI Prediction Outcome:\n${result.prediction_analysis}`;
           } else if (toolName === 'tactical_breakdown') {
             reply += `Tactical Breakdown:\n${result.tactical_breakdown}`;
           } else if (toolName === 'generate_highlights') {
             reply += `Highlights generation successful. Found ${result.highlights.length} events inside the audio telemetry.`;
-          } else if (toolName === 'predict_match') {
-            reply += `=== MATCH PREDICTION ===\n`;
-            reply += `${result.home_team} vs ${result.away_team}\n`;
-            reply += `Home Win: ${result.home_win_pct}%  |  Draw: ${result.draw_pct}%  |  Away Win: ${result.away_win_pct}%\n`;
-            reply += `Expected Goals: ${result.home_team} ${result.expected_goals?.home} - ${result.expected_goals?.away} ${result.away_team}\n`;
-            reply += `Elo: ${result.home_team} ${result.elo_home} vs ${result.away_team} ${result.elo_away}\n`;
-            reply += `Based on ${result.n_simulations?.toLocaleString()} Monte Carlo simulations (Elo → Dixon-Coles → Poisson).`;
-          } else if (toolName === 'simulate_tournament') {
-            reply += `=== TOURNAMENT ODDS (${result.total_simulations?.toLocaleString()} simulations) ===\n\n`;
-            const entries = Object.entries(result.teams as Record<string, any>)
-              .sort(([, a]: any, [, b]: any) => b.title_pct - a.title_pct)
-              .slice(0, 10);
-            reply += `Most Likely Champion: ${result.most_likely_champion}\n\n`;
-            reply += `Top 10 Title Contenders:\n`;
-            entries.forEach(([team, odds]: [string, any], i) => {
-              reply += `${i + 1}. ${team} — ${odds.title_pct}% title, ${odds.semi_pct}% semi, ${odds.quarter_pct}% QF (Elo: ${odds.elo})\n`;
-            });
           } else if (toolName === 'tactical_snapshot') {
             const caption = result.caption || "Tactical snapshot generated.";
             const imageUrl = `${API_BASE}${result.image_url}`;
@@ -794,13 +775,13 @@ export default function App() {
           setMessages(prev => [...prev, { sender: 'system', text: `MCP_TOOL_EXECUTION :: FAILED\nReason: ${err.message}` }]);
         }
       } else {
-        if (cleanText.includes('hello') || cleanText.includes('hi')) {
-          reply = "HELLO. STANDING BY FOR World Cup telemetry analysis. Ask about player clustering, outcome predictions, or post-match breakdowns.";
+          if (cleanText.includes('hello') || cleanText.includes('hi')) {
+          reply = "HELLO. STANDING BY FOR World Cup telemetry analysis. Ask about player clustering, tactical breakdowns, or match data.";
         } else if (cleanText.includes('match') || cleanText.includes('fixture') || cleanText.includes('score')) {
           if (matches.length > 0) {
             const recent = [...matches].sort((a, b) => ((b.date||'') > (a.date||'') ? 1 : -1)).slice(0, 5);
             reply = recent.map(m => `Match ${m.match_id}: ${m.home_team.name} ${m.score.home} - ${m.score.away} ${m.away_team.name} (${m.status})`).join('\n');
-            reply += "\n\nAsk 'predict match' or 'tactical breakdown' to invoke AI tools.";
+            reply += "\n\nAsk 'tactical breakdown' to invoke AI tools.";
           } else {
             reply = "Fetching match data... try asking for 'standings' or browse the Dashboard tab.";
           }
@@ -811,7 +792,7 @@ export default function App() {
             reply = "Standings data not loaded yet. Try the Dashboard tab.";
           }
         } else {
-          reply = "UNDERSTOOD. Try asking for 'player similarity to Erling Haaland', 'predict match', or 'match standings'.";
+          reply = "UNDERSTOOD. Try asking for 'player similarity to Erling Haaland', 'tactical breakdown', or 'match standings'.";
         }
         setTimeout(() => {
           setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
@@ -1413,7 +1394,7 @@ export default function App() {
           <div className="p-8 max-w-6xl w-full mx-auto space-y-8 animate-fade-in flex-grow flex flex-col">
             <div className="border-b border-[#2A2A28] pb-4 flex justify-between items-end">
               <div>
-                <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ PREDICTIVE_TACTICAL_HUD ]</span>
+                <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ TACTICAL_ANALYSIS_HUD ]</span>
                 <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">AI MATCH ANALYST</h1>
               </div>
 
@@ -1438,61 +1419,54 @@ export default function App() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-              {/* Prediction panel */}
+              {/* Tactical Visualization panel */}
               <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6 flex flex-col justify-between relative overflow-hidden">
                 <div>
-                  <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ OUTCOME_PREDICTION ]</h3>
+                  <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ TACTICAL_VISUALIZATION ]</h3>
 
-                  {(() => {
-                    const path = `/predict/match/${selectedMatchId}`;
-                    if (toolLoading[path]) return <LoadingState label="REQUESTING ENGINES..." />;
-                    if (toolError[path]) {
-                      return <ErrorState message={toolError[path]} onRetry={() => fetchPrediction(selectedMatchId)} />;
-                    }
-                    if (!predictionData) {
-                      return (
-                        <div className="border border-[#2A2A28] bg-black/20 rounded p-6 text-[0.75rem] text-neutral-400">
-                          Match prediction is not available yet. Please wait for the analyst service to respond or retry.
-                        </div>
-                      );
-                    }
-                    return (
-                      <div className="space-y-6">
-                        <div className="space-y-4">
-                          <div>
-                            <div className="flex justify-between text-[0.7rem] mono mb-1.5">
-                              <span>{predictionData.home_team.toUpperCase()}_WIN</span>
-                              <span className="text-[#D9622B] font-semibold">{predictionData.probabilities.home_win}%</span>
-                            </div>
-                            <div className="h-[2px] bg-neutral-900 overflow-hidden">
-                              <div className="h-full bg-[#D9622B]" style={{ width: `${predictionData.probabilities.home_win}%` }} />
-                            </div>
+                  {analystLoading ? (
+                    <LoadingState label="RUNNING DETECTION PIPELINE..." />
+                  ) : analystError ? (
+                    <ErrorState message={analystError} onRetry={fetchAnalystTactical} />
+                  ) : analystData ? (
+                    <div className="space-y-4">
+                      <img
+                        src={`${API_BASE}${analystData.image_url}`}
+                        alt="Tactical Analysis"
+                        className="w-full rounded border border-[#2A2A28]"
+                      />
+                      <div className="space-y-2">
+                        {analystData.formations && Object.entries(analystData.formations).map(([team, formation]) => (
+                          <div key={team} className="flex items-center gap-3 text-[0.75rem] mono">
+                            <span className={`font-bold ${team === '0' ? 'text-[#D9622B]' : 'text-[#5DA0FC]'}`}>
+                              TEAM_{team === '0' ? 'A' : 'B'}
+                            </span>
+                            <span className="text-neutral-400">FORMATION:</span>
+                            <span className="text-white font-semibold">{formation as string}</span>
                           </div>
-
-                          <div>
-                            <div className="flex justify-between text-[0.7rem] mono mb-1.5">
-                              <span>{predictionData.away_team.toUpperCase()}_WIN</span>
-                              <span className="text-white font-semibold">{predictionData.probabilities.away_win}%</span>
-                            </div>
-                            <div className="h-[2px] bg-neutral-900 overflow-hidden">
-                              <div className="h-full bg-neutral-400" style={{ width: `${predictionData.probabilities.away_win}%` }} />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="border-t border-[#2A2A28] pt-4">
-                          <div className="mono text-[0.55rem] text-neutral-500 mb-2">AI_SUMMARY_WRITEUP:</div>
-                          <p className="text-[0.75rem] text-neutral-300 leading-relaxed font-jetbrains">
-                            {predictionData.summary}
-                          </p>
-                        </div>
+                        ))}
                       </div>
-                    );
-                  })()}
+                      <div className="border-t border-[#2A2A28] pt-3">
+                        <p className="text-[0.7rem] text-neutral-300 leading-relaxed font-jetbrains">
+                          {analystData.caption}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border border-[#2A2A28] bg-black/20 rounded p-6 text-[0.75rem] text-neutral-400">
+                      Tactical visualization not yet generated.
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-[#2A2A28] pt-4 mt-6">
-                  <div className="mono text-[0.55rem] text-neutral-500">STATUS: ANALYSIS PIPELINE ENABLED</div>
+                  <button
+                    onClick={fetchAnalystTactical}
+                    disabled={analystLoading}
+                    className="mono text-[0.7rem] text-[#D9622B] border border-[#D9622B]/40 rounded px-4 py-2 hover:bg-[#D9622B]/10 transition-colors disabled:opacity-40 w-full"
+                  >
+                    {analystLoading ? 'RUNNING...' : analystData ? 'REFRESH ANALYSIS' : 'GENERATE ANALYSIS'}
+                  </button>
                 </div>
               </div>
 

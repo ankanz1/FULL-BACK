@@ -1200,6 +1200,51 @@ async def get_tactical_snapshot():
         "caption": caption or "Tactical snapshot generated."
     }
 
+_analyst_model = None
+def _get_analyst_model():
+    global _analyst_model
+    if _analyst_model is None:
+        from ultralytics import YOLO
+        model_path = os.path.join(_SCRIPT_DIR, "models", "football-detector", "train", "weights", "best.pt")
+        if os.path.exists(model_path):
+            _analyst_model = YOLO(model_path)
+        else:
+            _analyst_model = YOLO(os.path.join(_SCRIPT_DIR, "yolov8n.pt"))
+    return _analyst_model
+
+@app.get("/analyst/tactical")
+async def get_analyst_tactical():
+    """Runs the full tactical analyst pipeline (detect + track + homography + formation)."""
+    import tactical_analyst as ta
+    image_path = os.path.join(_SCRIPT_DIR, "public", "tactical_analyst.png")
+    caption_path = os.path.join(_SCRIPT_DIR, "public", "tactical_analyst_caption.txt")
+
+    needs_run = True
+    if os.path.exists(image_path) and os.path.exists(caption_path):
+        age = time.time() - os.path.getmtime(image_path)
+        if age < 600:
+            needs_run = False
+
+    formations = {}
+    if needs_run:
+        model = _get_analyst_model()
+        analyst = ta.TacticalAnalyst(model=model)
+        data = analyst.run()
+        if data is not None:
+            formations = {str(k): v for k, v in data["formations"].items()}
+
+    caption = ""
+    if os.path.exists(caption_path):
+        with open(caption_path) as f:
+            caption = f.read().strip()
+
+    return {
+        "type": "tactical_analyst",
+        "image_url": "/public/tactical_analyst.png",
+        "caption": caption or "Tactical analysis generated.",
+        "formations": formations,
+    }
+
 @app.get("/predict/match")
 async def predict_match(home_team: str, away_team: str):
     result = prediction_model.predict_match(home_team, away_team)

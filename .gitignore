@@ -55,4 +55,8 @@ archive/
 *.pt
 *.mp4
 python-service/public/highlights/
+python-service/public/tactical_analyst.png
+python-service/public/tactical_analyst_caption.txt
+python-service/public/tactical_snapshot.png
+python-service/public/tactical_snapshot_caption.txt
 
