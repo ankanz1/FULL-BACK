@@ -146,6 +146,7 @@ app.add_middleware(
 import json, time, sys
 import requests
 from fastapi.staticfiles import StaticFiles
+import prediction_model
 from sports_api import (
     get_wc_standings,
     get_wc_matches,
@@ -1198,6 +1199,33 @@ async def get_tactical_snapshot():
         "image_url": "/public/tactical_snapshot.png",
         "caption": caption or "Tactical snapshot generated."
     }
+
+@app.get("/predict/match")
+async def predict_match(home_team: str, away_team: str):
+    result = prediction_model.predict_match(home_team, away_team)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+@app.get("/predict/tournament")
+async def predict_tournament():
+    odds_path = os.path.join(_SCRIPT_DIR, "data", "tournament_odds.json")
+    if not os.path.exists(odds_path):
+        raise HTTPException(status_code=503, detail="Tournament odds not yet generated. Run build_tournament_sim.py first.")
+    with open(odds_path) as f:
+        return json.load(f)
+
+@app.get("/predict/teams")
+async def predict_teams():
+    teams = prediction_model.get_all_teams()
+    return {"teams": teams}
+
+@app.get("/predict/elo/{team_name}")
+async def predict_team_elo(team_name: str):
+    rating = prediction_model.get_team_rating(team_name)
+    if rating is None:
+        raise HTTPException(status_code=404, detail=f"Team '{team_name}' not found")
+    return {"team": team_name, "elo": rating}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

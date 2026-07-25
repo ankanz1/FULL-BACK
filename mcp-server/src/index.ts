@@ -149,16 +149,46 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {},
         },
       },
+      {
+        name: "predict_match",
+        description: "Predict match outcome between two teams using Elo rating system, Dixon-Coles bivariate Poisson adjustment, and Monte Carlo simulation. Returns home/away win percentages, draw percentage, and expected goals.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            home_team: {
+              type: "string",
+              description: "Home team name (e.g., 'Argentina', 'Brazil').",
+            },
+            away_team: {
+              type: "string",
+              description: "Away team name (e.g., 'Brazil', 'Germany').",
+            },
+          },
+          required: ["home_team", "away_team"],
+        },
+      },
+      {
+        name: "simulate_tournament",
+        description: "Return precomputed World Cup 2026 tournament odds — title probability, final advancement percentages for each of the 48 teams, based on 2,000 full tournament simulations.",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
     ],
   };
 });
 
 const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || "http://localhost:8000";
 
-async function callPythonService(path: string): Promise<any> {
+async function callPythonService(path: string, options?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<any> {
   const url = `${PYTHON_SERVICE_URL}${path}`;
   
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    method: options?.method || "GET",
+    headers: options?.headers,
+    body: options?.body,
+  });
   
   if (!response.ok) {
     const errText = await response.text();
@@ -296,6 +326,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     } catch (error: any) {
       throw new Error(`Failed to generate tactical snapshot: ${error.message}`);
+    }
+  }
+
+  if (name === "predict_match") {
+    const { home_team, away_team } = args as { home_team: string; away_team: string };
+    try {
+      const data = await callPythonService(`/predict/match?home_team=${encodeURIComponent(home_team)}&away_team=${encodeURIComponent(away_team)}`);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(data, null, 2),
+          },
+        ],
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to predict match: ${error.message}`);
+    }
+  }
+
+  if (name === "simulate_tournament") {
+    try {
+      const data = await callPythonService("/predict/tournament");
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(data, null, 2),
+          },
+        ],
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to load tournament odds: ${error.message}`);
     }
   }
 

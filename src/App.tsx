@@ -93,7 +93,7 @@ interface PlayerStats {
 
 export default function App() {
   // Custom router state
-  const [currentPath, setCurrentPath] = useState('/'); // '/' | '/dashboard' | '/analyst' | '/players' | '/highlights'
+  const [currentPath, setCurrentPath] = useState('/'); // '/' | '/dashboard' | '/analyst' | '/players' | '/predictions' | '/highlights'
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [, setLoading] = useState(false);
   const [, setProgress] = useState(0);
@@ -139,6 +139,17 @@ export default function App() {
   const [snapshotData, setSnapshotData] = useState<{ image_url?: string; caption?: string } | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [snapshotError, setSnapshotError] = useState('');
+
+  // Prediction states
+  const [allTeams, setAllTeams] = useState<string[]>([]);
+  const [predHomeTeam, setPredHomeTeam] = useState('');
+  const [predAwayTeam, setPredAwayTeam] = useState('');
+  const [predResult, setPredResult] = useState<any>(null);
+  const [predLoading, setPredLoading] = useState(false);
+  const [predError, setPredError] = useState('');
+  const [tournamentOdds, setTournamentOdds] = useState<any>(null);
+  const [tournamentOddsLoading, setTournamentOddsLoading] = useState(false);
+  const [tournamentOddsError, setTournamentOddsError] = useState('');
   const [dashboardLoading, setDashboardLoading] = useState<Record<string, boolean>>({});
   const [dashboardError, setDashboardError] = useState<Record<string, string>>({});
 
@@ -181,6 +192,18 @@ export default function App() {
 
     setTimeout(() => setLoading(false), 6000);
   }, []);
+
+  // Fetch prediction data on mount and when navigating to predictions
+  useEffect(() => {
+    fetchAllTeams();
+  }, []);
+
+  // Fetch tournament odds when navigating to predictions page
+  useEffect(() => {
+    if (currentPath === '/predictions') {
+      fetchTournamentOdds();
+    }
+  }, [currentPath]);
 
   // Detect prefers-reduced-motion
   useEffect(() => {
@@ -531,6 +554,53 @@ export default function App() {
     }
   };
 
+  // Fetch all teams for prediction dropdown
+  const fetchAllTeams = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/predict/teams`);
+      if (res.ok) {
+        const data = await res.json();
+        setAllTeams(data.teams.map((t: any) => t.team));
+      }
+    } catch (e) {
+      console.error('Error fetching teams:', e);
+    }
+  };
+
+  // Fetch match prediction
+  const fetchMatchPredict = async (home: string, away: string) => {
+    setPredLoading(true);
+    setPredError('');
+    setPredResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/predict/match?home_team=${encodeURIComponent(home)}&away_team=${encodeURIComponent(away)}`);
+      if (!res.ok) throw new Error(`Prediction failed: ${res.statusText}`);
+      const data = await res.json();
+      setPredResult(data);
+    } catch (e: any) {
+      setPredError(e?.message || 'Prediction request failed');
+    } finally {
+      setPredLoading(false);
+    }
+  };
+
+  // Fetch tournament odds
+  const fetchTournamentOdds = async () => {
+    setTournamentOddsLoading(true);
+    setTournamentOddsError('');
+    setTournamentOdds(null);
+    try {
+      const res = await fetch(`${API_BASE}/predict/tournament`);
+      if (!res.ok) throw new Error(`Failed to load tournament odds: ${res.statusText}`);
+      const data = await res.json();
+      setTournamentOdds(data);
+    } catch (e: any) {
+      setTournamentOddsError(e?.message || 'Failed to load tournament odds');
+    } finally {
+      setTournamentOddsLoading(false);
+    }
+  };
+
   // Fetch tactical breakdown results
   const fetchTacticalBreakdown = async (matchId: string) => {
     const path = `/tactical/match/${matchId}`;
@@ -641,9 +711,26 @@ export default function App() {
         toolName = 'player_style_cluster';
         const targetPlayer = players.find(p => cleanText.includes(p.name.toLowerCase())) || players[0];
         path = `/cluster/player/${targetPlayer.player_id}`;
-      } else if (cleanText.includes('predict') || cleanText.includes('prediction') || cleanText.includes('who will win')) {
-        toolName = 'predict_outcome';
-        path = `/predict/match/${selectedMatchId}`;
+      } else if (cleanText.includes('tournament') || cleanText.includes('who will win the world cup') || cleanText.includes('world cup winner') || cleanText.includes('champion odds') || cleanText.includes('title odds')) {
+        toolName = 'simulate_tournament';
+        path = `/predict/tournament`;
+      } else if ((cleanText.includes('predict') || cleanText.includes('prediction') || cleanText.includes('who will win') || cleanText.includes('vs')) && !cleanText.includes('tournament')) {
+        // Try to extract team names for match prediction
+        const teams_split = cleanText.split(/\bvs\b|\bversus\b|\bagainst\b/);
+        if (teams_split.length >= 2) {
+          const potential_home = teams_split[0].replace(/predict|prediction|who will win|who wins|[?,!.]/g, '').trim();
+          const potential_away = teams_split[1].replace(/[?,!.]/g, '').trim();
+          const matched_home = allTeams.find(t => t.toLowerCase().includes(potential_home) || potential_home.includes(t.toLowerCase()));
+          const matched_away = allTeams.find(t => t.toLowerCase().includes(potential_away) || potential_away.includes(t.toLowerCase()));
+          if (matched_home && matched_away) {
+            toolName = 'predict_match';
+            path = `/predict/match?home_team=${encodeURIComponent(matched_home)}&away_team=${encodeURIComponent(matched_away)}`;
+          }
+        }
+        if (!toolName) {
+          toolName = 'predict_outcome';
+          path = `/predict/match/${selectedMatchId}`;
+        }
       } else if (cleanText.includes('breakdown') || cleanText.includes('tactical') || cleanText.includes('tactics')) {
         toolName = 'tactical_breakdown';
         path = `/tactical/match/${selectedMatchId}`;
@@ -678,6 +765,23 @@ export default function App() {
             reply += `Tactical Breakdown:\n${result.tactical_breakdown}`;
           } else if (toolName === 'generate_highlights') {
             reply += `Highlights generation successful. Found ${result.highlights.length} events inside the audio telemetry.`;
+          } else if (toolName === 'predict_match') {
+            reply += `=== MATCH PREDICTION ===\n`;
+            reply += `${result.home_team} vs ${result.away_team}\n`;
+            reply += `Home Win: ${result.home_win_pct}%  |  Draw: ${result.draw_pct}%  |  Away Win: ${result.away_win_pct}%\n`;
+            reply += `Expected Goals: ${result.home_team} ${result.expected_goals?.home} - ${result.expected_goals?.away} ${result.away_team}\n`;
+            reply += `Elo: ${result.home_team} ${result.elo_home} vs ${result.away_team} ${result.elo_away}\n`;
+            reply += `Based on ${result.n_simulations?.toLocaleString()} Monte Carlo simulations (Elo → Dixon-Coles → Poisson).`;
+          } else if (toolName === 'simulate_tournament') {
+            reply += `=== TOURNAMENT ODDS (${result.total_simulations?.toLocaleString()} simulations) ===\n\n`;
+            const entries = Object.entries(result.teams as Record<string, any>)
+              .sort(([, a]: any, [, b]: any) => b.title_pct - a.title_pct)
+              .slice(0, 10);
+            reply += `Most Likely Champion: ${result.most_likely_champion}\n\n`;
+            reply += `Top 10 Title Contenders:\n`;
+            entries.forEach(([team, odds]: [string, any], i) => {
+              reply += `${i + 1}. ${team} — ${odds.title_pct}% title, ${odds.semi_pct}% semi, ${odds.quarter_pct}% QF (Elo: ${odds.elo})\n`;
+            });
           } else if (toolName === 'tactical_snapshot') {
             const caption = result.caption || "Tactical snapshot generated.";
             const imageUrl = `${API_BASE}${result.image_url}`;
@@ -778,6 +882,13 @@ export default function App() {
             >
               PLAYERS
               {currentPath === '/players' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
+            </button>
+            <button
+              onClick={() => handleNavigate('/predictions')}
+              className={`text-[0.7rem] uppercase tracking-widest font-semibold px-2 py-1.5 transition relative ${currentPath === '/predictions' ? 'text-[#D9622B]' : 'text-[#8B8A85] hover:text-[#ECEAE3]'}`}
+            >
+              PREDICTIONS
+              {currentPath === '/predictions' && <span className="absolute bottom-0 left-2 right-2 h-[2px] bg-[#D9622B]" />}
             </button>
             <button
               onClick={() => handleNavigate('/highlights')}
@@ -1790,6 +1901,157 @@ export default function App() {
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        )}
+
+        {/* 5. PREDICTIONS PATH */}
+        {currentPath === '/predictions' && (
+          <div className="p-8 max-w-6xl w-full mx-auto space-y-8 animate-fade-in flex-grow">
+            <div className="border-b border-[#2A2A28] pb-4 flex justify-between items-end">
+              <div>
+                <span className="mono text-[0.65rem] text-[#D9622B] tracking-widest block mb-1">[ ELO_POISSON_MONTE_CARLO ]</span>
+                <h1 className="font-syncopate text-[1.2rem] md:text-[1.5rem] font-bold tracking-widest text-[#ECEAE3]">PREDICTIONS</h1>
+              </div>
+              <span className="mono text-[0.6rem] text-neutral-500">MODE: PRECOMPUTED_STATIC</span>
+            </div>
+
+            {/* Match Predictor */}
+            <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+              <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase mb-4">[ MATCH_PREDICTOR ]</h3>
+              <div className="flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex-1 w-full">
+                  <label className="mono text-[0.55rem] text-neutral-500 block mb-1">HOME TEAM</label>
+                  <select
+                    value={predHomeTeam}
+                    onChange={e => setPredHomeTeam(e.target.value)}
+                    className="w-full bg-[#0E0E0E] border border-[#2A2A28] rounded px-3 py-2 text-[0.75rem] text-[#ECEAE3] mono focus:outline-none focus:border-[#D9622B]"
+                  >
+                    <option value="">Select home team...</option>
+                    {allTeams.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1 w-full">
+                  <label className="mono text-[0.55rem] text-neutral-500 block mb-1">AWAY TEAM</label>
+                  <select
+                    value={predAwayTeam}
+                    onChange={e => setPredAwayTeam(e.target.value)}
+                    className="w-full bg-[#0E0E0E] border border-[#2A2A28] rounded px-3 py-2 text-[0.75rem] text-[#ECEAE3] mono focus:outline-none focus:border-[#D9622B]"
+                  >
+                    <option value="">Select away team...</option>
+                    {allTeams.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={() => fetchMatchPredict(predHomeTeam, predAwayTeam)}
+                  disabled={!predHomeTeam || !predAwayTeam || predLoading}
+                  className="mono text-[0.7rem] text-white bg-[#D9622B] rounded px-6 py-2 hover:bg-[#D9622B]/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {predLoading ? 'COMPUTING...' : 'PREDICT'}
+                </button>
+              </div>
+
+              {predError && (
+                <div className="mt-4 border border-red-900/50 bg-red-900/10 rounded p-3">
+                  <span className="mono text-[0.65rem] text-red-400">{predError}</span>
+                </div>
+              )}
+
+              {predResult && (
+                <div className="mt-6 space-y-4">
+                  <div className="flex items-center justify-center gap-6 py-3">
+                    <div className="text-center font-syncopate text-[0.85rem] text-white font-bold">{predResult.home_team}</div>
+                    <span className="mono text-[0.6rem] text-neutral-500">vs</span>
+                    <div className="text-center font-syncopate text-[0.85rem] text-white font-bold">{predResult.away_team}</div>
+                  </div>
+                  <div className="flex gap-4">
+                    {[
+                      { key: 'home_win_pct', label: `${predResult.home_team} WIN`, color: '#D9622B' },
+                      { key: 'draw_pct', label: 'DRAW', color: '#eab308' },
+                      { key: 'away_win_pct', label: `${predResult.away_team} WIN`, color: '#8B8A85' },
+                    ].map(({ key, label, color }) => (
+                      <div key={key} className="flex-1 border border-[#2A2A28] rounded p-3 bg-[#0E0E0E]/60">
+                        <div className="mono text-[0.55rem] text-neutral-500 uppercase mb-1">{label}</div>
+                        <div className="mono text-xl font-bold mb-2" style={{ color }}>{predResult[key]}%</div>
+                        <div className="h-2 bg-neutral-900 rounded overflow-hidden">
+                          <div className="h-full rounded" style={{ width: `${predResult[key]}%`, backgroundColor: color }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t border-[#2A2A28] pt-3 mt-2">
+                    <div className="grid grid-cols-2 gap-4 text-[0.65rem] mono">
+                      <div><span className="text-neutral-500">Expected Goals:</span> <span className="text-[#D9622B]">{predResult.home_team} {predResult.expected_goals?.home}</span> - <span className="text-neutral-400">{predResult.expected_goals?.away} {predResult.away_team}</span></div>
+                      <div><span className="text-neutral-500">Elo Rating:</span> <span className="text-white">{predResult.elo_home}</span> vs <span className="text-white">{predResult.elo_away}</span></div>
+                      <div><span className="text-neutral-500">Simulations:</span> <span className="text-white">{predResult.n_simulations?.toLocaleString()}</span></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Tournament Odds */}
+            <div className="border border-[#2A2A28] bg-[#171715]/40 rounded p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="mono text-[0.7rem] text-[#D9622B] tracking-widest uppercase">[ TOURNAMENT_ODDS ]</h3>
+                {tournamentOdds && (
+                  <span className="mono text-[0.55rem] text-neutral-500">{tournamentOdds.total_simulations?.toLocaleString()} simulations</span>
+                )}
+              </div>
+              {tournamentOddsLoading ? (
+                <LoadingState label="Loading tournament odds..." />
+              ) : tournamentOddsError ? (
+                <ErrorState message={tournamentOddsError} onRetry={fetchTournamentOdds} />
+              ) : tournamentOdds ? (
+                <div className="max-h-[600px] overflow-y-auto space-y-1">
+                  {Object.entries(tournamentOdds.teams as Record<string, any>)
+                    .sort(([, a]: any, [, b]: any) => b.title_pct - a.title_pct)
+                    .map(([team, odds]: [string, any], idx) => (
+                      <div key={team} className="flex items-center gap-3 py-2 px-2 rounded hover:bg-[#2A2A28]/30 transition-colors">
+                        <span className="mono text-[0.6rem] text-neutral-500 w-6 text-right">{idx + 1}</span>
+                        <span className="mono text-[0.7rem] text-white font-semibold w-28 truncate">{team}</span>
+                        <div className="flex-1 flex items-center gap-1">
+                          <div className="flex-1 h-3 bg-neutral-900 rounded overflow-hidden">
+                            <div className="h-full bg-[#D9622B] rounded" style={{ width: `${odds.title_pct}%` }} />
+                          </div>
+                          <span className="mono text-[0.65rem] text-[#D9622B] font-bold w-12 text-right">{odds.title_pct}%</span>
+                        </div>
+                        <div className="hidden md:flex gap-3 text-[0.55rem] mono text-neutral-500">
+                          <span className="w-10 text-right">{odds.final_pct}%</span>
+                          <span className="w-10 text-right">{odds.semi_pct}%</span>
+                          <span className="w-10 text-right">{odds.quarter_pct}%</span>
+                          <span className="w-10 text-right">{odds.round16_pct}%</span>
+                        </div>
+                        <div className="hidden lg:block mono text-[0.55rem] text-neutral-600 w-16 text-right">ELO {odds.elo}</div>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <button
+                    onClick={fetchTournamentOdds}
+                    className="mono text-[0.7rem] text-[#D9622B] border border-[#D9622B]/40 rounded px-4 py-2 hover:bg-[#D9622B]/10 transition-colors"
+                  >
+                    LOAD TOURNAMENT ODDS
+                  </button>
+                </div>
+              )}
+              {tournamentOdds && (
+                <div className="mt-3 flex gap-4 text-[0.55rem] mono text-neutral-500 border-t border-[#2A2A28] pt-3">
+                  <span className="text-[#D9622B]">■</span> Title
+                  <span className="text-neutral-600">│</span>
+                  <span>Final</span>
+                  <span>Semi</span>
+                  <span>QF</span>
+                  <span>R16</span>
+                  <span className="text-neutral-600">│</span>
+                  <span className="italic">Lower match count = less reliable rating. Teams with &lt;20 historical matches may have inflated/deflated Elo.</span>
+                </div>
+              )}
             </div>
           </div>
         )}
