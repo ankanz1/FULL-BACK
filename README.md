@@ -149,7 +149,6 @@ This project was originally built for The Injective Global Cup hackathon, which 
 ## Getting started
 
 ### Prerequisites
-- Node.js 18+
 - Python 3.10+
 - `ffmpeg` installed on your system
 - A sports data API key (e.g. football-data.org)
@@ -209,7 +208,6 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 - Live match data: [football-data.org](https://www.football-data.org) / API-Football
 - Player stats for clustering: [Transfermarkt data via Kaggle](https://www.kaggle.com/datasets/davidcariboo/player-scores)
 - Historical results for prediction model: [International football results 1872–2017, Kaggle](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017)
-- Prediction methodology reference: [Hicruben/world-cup-2026-prediction-model](https://github.com/Hicruben/world-cup-2026-prediction-model) (Elo + Dixon-Coles + Monte Carlo)
 - Sample match footage: sourced under free-use license from Pexels/Pixabay for demo/testing purposes only
 
 ## Known limitations
@@ -219,6 +217,3 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 - **Prediction model** confidence varies by team — nations with sparse historical match data in the training set will have less reliable Elo ratings than heavily-represented ones
 - x402/CCTP payment infrastructure was descoped; see [Injective technologies used](#injective-technologies-used)
 
-## License
-
-MIT — see `LICENSE` for details.
