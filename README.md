@@ -1,6 +1,4 @@
 # FULL BACK
-### An AI analyst that has the fan's back — on and off the pitch
-
 
 
 ---
@@ -8,153 +6,219 @@
 
 ---
 
-## The name, decoded
+**A complete AI-powered World Cup platform — live data, player analytics, match predictions, and a conversational assistant, all in one place.**
 
-A full back is the defensive position that also drives the attack — covers your flank, then joins the run forward. That's the product: it pushes the analysis forward (AI-generated tactical insight most fans can't get anywhere else), freely accessible and ready on demand
-
----
-
-## One-liner
-
-**FULL BACK is an AI match analyst, exposed as an MCP server, that any fan or any agent can query for World Cup insight — from live scores to AI tactical breakdowns, all freely accessible.**
+FULL BACK lets a fan (or any AI agent) ask natural-language questions about the World Cup — live scores, standings, player style comparisons, match predictions, tactical breakdowns — and get answers grounded in real data, not guesses. Everything is free to use, no wallet or payment required.
 
 ---
 
-## The problem
+## Table of contents
 
-World Cup content today is either:
-- **Free but shallow** — scores, standings, headlines
-- **Deep but gated behind subscriptions** — paid analytics platforms that want a monthly commitment for something you might use twice during the tournament
-- **Built for humans only** — no fan-facing product today is built so that an AI agent (yours, a friend's, a future one) can query it directly and get structured, payable, verifiable answers
-
-Fans want the deep stuff — win probabilities, tactical breakdowns, player-style comparisons — but only when they actually want it, for a match that actually matters to them. Subscriptions are the wrong shape for that.
-
----
-
-## The idea
-
-A single MCP server sits at the center. It exposes tools an AI agent (or a simple chat UI) can call:
-
-**Live scores, standings, team form** — the basics, no friction.
-
-**AI-powered analysis** — ask "how will Brazil do against Argentina tonight" and get a genuine AI-generated tactical breakdown, instantly, freely.
-
-**Reusable, not just a demo** — the same logic is packaged as an installable **Agent Skill**, so any developer's AI agent can install `worldcup-analyst` and get World Cup expertise. It's a developer tool, not just an app.
+- [What this is](#what-this-is)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Tech stack](#tech-stack)
+- [Injective technologies used](#injective-technologies-used)
+- [Project structure](#project-structure)
+- [Getting started](#getting-started)
+- [Environment variables](#environment-variables)
+- [Data sources & credits](#data-sources--credits)
+- [Known limitations](#known-limitations)
+- [License](#license)
 
 ---
 
-## Core features
+## What this is
 
-| Feature | Powered by |
-|---|---|
-| Live scores & standings | MCP tool, sports data API |
-| Team form lookup | MCP tool |
-| AI match prediction & tactical writeup | LLM |
-| Player-style clustering ("which players play like X") | pandas + K-Means |
-| AI-generated highlight clips from match audio | librosa + moviepy |
-| Formation snapshot from match footage | YOLOv8 + homography |
-| Installable analyst skill for other agents | Agent Skills |
+FULL BACK is built around one core idea: an **MCP server** exposes a set of World Cup analysis tools, and those same tools are usable in two ways —
 
----
+1. Through a **fan-facing dashboard and chat interface** on the website
+2. Through any **AI agent** that installs the accompanying **Agent Skill**, giving it the same World Cup expertise Claude Code (or any other MCP-compatible agent) can call directly
 
-## USP — why this wins
+Every tool is free and open — no subscriptions, no per-query payment, no wallet.
 
-1. **MCP is the actual product architecture** (not a wrapper bolted on at the end), and Agent Skills make the work reusable by other builders.
-2. **The dashboard is genuinely useful** — anyone can evaluate usability on the spot.
-3. **Data science with a clear head, not scope creep.** Player clustering is fully built. Highlights is built. Formation tracking is explicitly a bonus screenshot, not a promise
+## Features
 
----
+### Dashboard
+- **Overview** — live/today's matches, condensed standings, top storylines
+- **Table** — full group standings by group
+- **Fixtures** — match list by date, live score updates for in-progress matches
+- **Player stats** — top scorers, top assists, linked into player style clustering
+- **Team stats** — team form (recent results, goals for/against)
+- **Prediction** — match win/draw/loss predictor and full tournament-odds simulation
 
-## Two user flows
+### AI Analyst chat
+A conversational interface where a fan asks a question and an LLM agent decides which MCP tool to call, executes it, and answers using the real result — never a hallucinated stat.
 
-**Fan flow:** open the dashboard → check today's fixtures and form → ask the chat widget a tactical question → get a genuinely useful, AI-written answer
+### Data-science features
+- **Player style clustering** — K-Means clustering of players into playing styles based on historical per-90 stats (Transfermarkt data via Kaggle)
+- **Highlight detection** — automatic detection of exciting moments in match audio via loudness-peak analysis
+- **Tactical snapshot** — player/ball detection and tracking from match footage, with a zone-based tactical read (not precise pitch-coordinate mapping — see [Known limitations](#known-limitations))
+- **Match & tournament prediction** — Elo team ratings + Dixon-Coles Poisson expected-goals model + Monte Carlo simulation, trained on ~150 years of international results
 
-**Developer flow:** `npx skills add` the `worldcup-analyst` skill into their own agent → their agent now knows how to query FULL BACK's MCP server
+## Architecture
 
----
+```mermaid
+graph TD
+    subgraph Frontend["Frontend — Next.js"]
+        Dashboard["Dashboard tabs\n(Overview, Table, Fixtures,\nPlayer/Team stats, Prediction)"]
+        Chat["Analyst chat UI"]
+    end
 
-## Design language
+    subgraph Agent["LLM Agent Layer"]
+        LLM["LLM tool-calling loop\n(Claude API)"]
+    end
 
-The homepage sets the tone — carry it through:
-- Near-black backgrounds, single orange accent color for live/active states
-- Monospace, all-caps micro-labels for data readouts (mirroring the "LATITUDE / FLOODLIGHT" telemetry style) — use this pattern for match stats and odds
-- Bold condensed display type for headlines, restrained everywhere else
-- The stadium-at-night photography motif can extend into the dashboard as a subtle background texture, not a busy one
+    subgraph MCP["MCP Server — Node/TypeScript"]
+        ToolsFree["get_match_stats\nget_team_form\nget_standings"]
+        ToolsData["player_style_cluster\ngenerate_highlights\ntactical_snapshot\npredict_match\nsimulate_tournament"]
+    end
 
----
+    subgraph Python["Python Service — FastAPI"]
+        Clustering["Player clustering\n(K-Means, precomputed)"]
+        Highlights["Highlight detection\n(librosa + moviepy)"]
+        Tactical["Tactical snapshot\n(YOLOv8 + ByteTrack, precomputed)"]
+        Prediction["Elo + Dixon-Coles + Monte Carlo\n(precomputed)"]
+    end
 
-## Architecture (recap)
+    subgraph External["External data"]
+        SportsAPI["Sports data API\n(live scores, standings, fixtures)"]
+        Kaggle["Kaggle datasets\n(player stats, historical results)"]
+    end
+
+    subgraph Skill["Agent Skill"]
+        WorldCupSkill["worldcup-analyst skill\ninstallable by any MCP-compatible agent"]
+    end
+
+    Dashboard --> ToolsFree
+    Dashboard --> ToolsData
+    Chat --> LLM
+    LLM --> ToolsFree
+    LLM --> ToolsData
+    ToolsFree --> SportsAPI
+    ToolsData --> Python
+    Clustering --> Kaggle
+    Prediction --> Kaggle
+    Skill -.->|installs & calls| MCP
+```
+
+**How it works end to end:**
+1. A fan interacts with the dashboard directly, or asks the Analyst chat a free-form question
+2. The chat's LLM agent decides whether it needs live data — if so, it calls the relevant MCP tool rather than guessing
+3. Simple tools (scores, standings, form) call the sports data API directly
+4. Data-science tools (clustering, highlights, tactical snapshot, prediction) are backed by a Python service, most of which run as **one-time precomputed pipelines** rather than live-per-request computation
+5. The same MCP server is installable as an **Agent Skill** by any other AI agent, giving it identical World Cup capabilities outside this website entirely
+
+## Tech stack
+
+- **Frontend:** Next.js, TypeScript, Tailwind
+- **MCP server:** Node.js, TypeScript, `@modelcontextprotocol/sdk`
+- **Data-science service:** Python, FastAPI
+- **LLM:** Claude API (tool-calling)
+- **ML/data libraries:** pandas, scikit-learn, librosa, moviepy, ultralytics (YOLOv8), supervision (ByteTrack), OpenCV
+- **Deployment:** Vercel (frontend), Railway (backend services)
+
+## Injective technologies used
+
+This project was originally built for The Injective Global Cup hackathon, which asked entrants to meaningfully use x402, CCTP, MCP Server, and Agent Skills.
+
+- **MCP Server** — ✅ core to the entire architecture, as described above
+- **Agent Skills** — ✅ the whole tool set is packaged as an installable skill any MCP-compatible agent can use
+- **x402 / CCTP** — initially integrated for cross-chain micropayments gating premium tools, but descoped during development due to reliability issues under time constraints. Rather than ship a broken payment flow, every tool was made freely accessible instead. This is a deliberate engineering tradeoff, not an oversight.
+
+## Project structure
 
 ```
-Fan dashboard ──┐
-                 ├──▶ MCP server ──▶ Tools (scores, standings, predictions, clustering, highlights)
-External agents ─┘
-                         │
-                   Agent Skill (packaged for reuse)
+.
+├── frontend/                 # Next.js app
+│   ├── app/                  # Dashboard tabs, Analyst chat, Prediction section
+│   └── components/           # Shared UI components
+├── mcp-server/                # Node/TypeScript MCP server
+│   └── src/
+│       └── index.ts          # Tool registrations
+├── python-service/            # FastAPI data-science service
+│   ├── main.py
+│   ├── build_clusters.py     # One-time: player clustering
+│   ├── highlights.py          # Highlight detection
+│   ├── tactical_snapshot.py   # One-time: tactical analysis
+│   ├── build_elo_ratings.py  # One-time: Elo ratings from historical data
+│   └── public/                # Precomputed static outputs (images, JSON)
+└── README.md
 ```
 
----
+## Getting started
 
-## Technical Architecture
+### Prerequisites
+- Node.js 18+
+- Python 3.10+
+- `ffmpeg` installed on your system
+- A sports data API key (e.g. football-data.org)
+- An Anthropic API key (for the Analyst chat's LLM)
 
-## How it works
+### Setup
 
-```
-
- User / Agent ──▶ MCP Server ──▶ Python FastAPI Microservice ──▶ Gemini API / K-Means
-```
-
-### Model Context Protocol (MCP)
-**Unifies human and machine execution.** The analyst is packaged as an MCP server. This means any LLM client (Cursor, Claude Desktop, custom agents) can natively discover and call FULL BACK tools.
-
-### Agent Skills
-**Modular reusability.** By distributing the analyst as an installable skill under the Open Agent Skills standard, other developers can add sports-analyst telemetry to their own agents with a single command.
-
----
-
-## Local Setup Instructions
-
-### 1. Requirements
-*   **Node.js**: v20+
-*   **Python**: v3.10+
-*   **npm** / **pip**
-
-### 2. Environment Setup
-Clone the repository and copy the template configuration:
 ```bash
-cp .env.example .env
-```
-Fill in the configuration details inside `.env`:
-*   `FOOTBALL_DATA_API_KEY`: Your football API key.
-*   `GEMINI_API_KEY`: API key for Gemini models.
+# Clone the repo
+git clone <your-repo-url>
+cd full-back
 
-### 3. Run the Python Data Science Service
-```bash
-cd python-service
-# Install dependencies
-pip install -r requirements.txt
-# Run the FastAPI server
-python main.py
-```
-This runs the microservice on `http://localhost:8000`.
-
-### 4. Run the Node MCP Server
-```bash
-cd mcp-server
-# Install dependencies
+# Frontend
+cd frontend
 npm install
-# Compile TypeScript and run
-npm run start
-```
-This starts the Stdio MCP server bridge.
-
-### 5. Run the Frontend Dashboard
-From the root directory:
-```bash
-# Install packages
-npm install
-# Run local Vite dashboard
 npm run dev
-```
-Open `http://localhost:5173` in your browser. Click **ENTER THE FIELD** to view the live dashboard.
 
+# MCP server
+cd ../mcp-server
+npm install
+npm run dev
+
+# Python service
+cd ../python-service
+pip install -r requirements.txt --break-system-packages
+# Run one-time precompute scripts before starting the API:
+python build_clusters.py
+python build_elo_ratings.py
+uvicorn main:app --reload
+```
+
+### Installing the Agent Skill
+
+```bash
+# Copy the skill into your agent's skills directory
+cp -r worldcup-analyst-skill ~/.claude/skills/
+```
+Refer to your MCP client's documentation for exact skill installation steps.
+
+## Environment variables
+
+Create a `.env` file at the project root:
+
+```
+# Sports data API
+SPORTS_API_KEY=your_key_here
+
+# LLM (Analyst chat)
+ANTHROPIC_API_KEY=your_key_here
+
+# Frontend (local dev)
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+## Data sources & credits
+
+- Live match data: [football-data.org](https://www.football-data.org) / API-Football
+- Player stats for clustering: [Transfermarkt data via Kaggle](https://www.kaggle.com/datasets/davidcariboo/player-scores)
+- Historical results for prediction model: [International football results 1872–2017, Kaggle](https://www.kaggle.com/datasets/martj42/international-football-results-from-1872-to-2017)
+- Prediction methodology reference: [Hicruben/world-cup-2026-prediction-model](https://github.com/Hicruben/world-cup-2026-prediction-model) (Elo + Dixon-Coles + Monte Carlo)
+- Sample match footage: sourced under free-use license from Pexels/Pixabay for demo/testing purposes only
+
+## Known limitations
+
+- **Tactical snapshot** uses screen-position zone estimates (defensive/middle/attacking thirds), not precise pitch-coordinate homography — the source footage didn't contain enough clear landmark points for a reliable metric transform, so the output is intentionally descriptive rather than presenting false precision
+- **All-time top scorers** (if included in Overview) is a static, manually-sourced list, not live-computed — it can go stale if a current player breaks the record mid-tournament
+- **Prediction model** confidence varies by team — nations with sparse historical match data in the training set will have less reliable Elo ratings than heavily-represented ones
+- x402/CCTP payment infrastructure was descoped; see [Injective technologies used](#injective-technologies-used)
+
+## License
+
+MIT — see `LICENSE` for details.
