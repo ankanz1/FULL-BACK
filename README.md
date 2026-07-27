@@ -178,6 +178,25 @@ ANTHROPIC_API_KEY=your_key_here
 # Frontend (local dev)
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
+# Demo Pic
+
+## Home
+<img width="1917" height="865" alt="image" src="https://github.com/user-attachments/assets/196af7b7-3d93-4f4c-b879-30f69d57f3c4" />
+
+## Dashbord
+<img width="1917" height="867" alt="image" src="https://github.com/user-attachments/assets/e0641dc3-8121-49f2-8579-d877751966d2" />
+
+
+## Analyst
+<img width="1913" height="866" alt="image" src="https://github.com/user-attachments/assets/94736fc9-922e-4626-ae85-7a864a30933d" />
+
+## Players
+<img width="1917" height="868" alt="image" src="https://github.com/user-attachments/assets/4318a221-7ffa-43ca-900f-520ec1a4af03" />
+
+## Prediction
+<img width="1917" height="870" alt="image" src="https://github.com/user-attachments/assets/8f0376b7-22fc-403f-bf26-d8cfdec48041" />
+
+
 
 ## Data sources & credits
 
