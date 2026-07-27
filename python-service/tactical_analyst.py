@@ -14,7 +14,7 @@ HOMOGRAPHY_H_PATH = PUBLIC_DIR / "homography_H.npy"
 OUTPUT_IMAGE = PUBLIC_DIR / "tactical_analyst.png"
 CAPTION_PATH = PUBLIC_DIR / "tactical_analyst_caption.txt"
 
-FRAME_SKIP = 5
+FRAME_SKIP = 30
 CONF_THRESH = 0.35
 
 PITCH_LENGTH = 105.0
@@ -132,9 +132,7 @@ class TacticalAnalyst:
         H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         print(f"Video: {total_frames} frames, {fps:.0f} fps, {W}x{H}")
 
-        first_frame = None
         frame_colors = defaultdict(list)
-        track_teams = {}
         team_positions = {0: [], 1: []}
         ball_positions = []
         frame_count = 0
@@ -146,8 +144,6 @@ class TacticalAnalyst:
             if frame_count % FRAME_SKIP != 0:
                 frame_count += 1
                 continue
-            if first_frame is None:
-                first_frame = frame.copy()
 
             persons, balls = self.detect(frame)
             for i, box in enumerate(persons):
@@ -165,7 +161,7 @@ class TacticalAnalyst:
                 if px is not None:
                     ball_positions.append((px, py))
 
-            if frame_count % 50 == 0:
+            if frame_count % 100 == 0:
                 print(f"  Frame {frame_count}/{total_frames}")
 
             frame_count += 1
@@ -180,6 +176,7 @@ class TacticalAnalyst:
 
         avg_colors = [np.mean([c[0] for c in colors], axis=0) for colors in frame_colors.values()]
         team_labels = self.assign_teams_batch(avg_colors)
+        track_teams = {}
         for idx, tid in enumerate(frame_colors.keys()):
             track_teams[tid] = team_labels[idx]
 
@@ -187,37 +184,13 @@ class TacticalAnalyst:
         print(f"  Team B: {sum(1 for t in team_labels if t == 1)} players")
         print(f"  Officials/ambig: {sum(1 for t in team_labels if t == -1)}")
 
-        cap = cv2.VideoCapture(str(VIDEO_PATH))
-        frame_count = 0
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            if frame_count % FRAME_SKIP != 0:
-                frame_count += 1
+        for idx, tid in enumerate(frame_colors.keys()):
+            if tid not in track_teams or track_teams[tid] < 0:
                 continue
-
-            persons, balls = self.detect(frame)
-            for i, box in enumerate(persons):
-                tid = list(frame_colors.keys())[i] if i < len(frame_colors) else i
-                if tid not in track_teams or track_teams[tid] < 0:
-                    continue
-                cx = (box[0] + box[2]) / 2.0
-                cy = (box[1] + box[3]) / 2.0
+            for _c, cx, cy in frame_colors[tid]:
                 px, py = self.image_to_pitch(cx, cy)
                 if px is not None:
                     team_positions[track_teams[tid]].append((px, py))
-
-            for box in balls:
-                cx = (box[0] + box[2]) / 2.0
-                cy = (box[1] + box[3]) / 2.0
-                px, py = self.image_to_pitch(cx, cy)
-                if px is not None:
-                    ball_positions.append((px, py))
-
-            frame_count += 1
-
-        cap.release()
 
         formations = {}
         for team in [0, 1]:

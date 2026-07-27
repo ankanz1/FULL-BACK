@@ -131,6 +131,11 @@ def process_clustering():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        _get_analyst_model()
+        print("Analyst model pre-warmed at startup")
+    except Exception as e:
+        print(f"Analyst model pre-warm failed (will lazy-load): {e}")
     yield
 
 app = FastAPI(title="FULL BACK Data Science Service", version="1.0.0", lifespan=lifespan)
