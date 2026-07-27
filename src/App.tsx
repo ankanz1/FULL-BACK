@@ -5,7 +5,7 @@ import LoadingState from './components/LoadingState';
 import ErrorState from './components/ErrorState';
 import OverviewSection from './components/OverviewSection';
 
-const API_BASE = import.meta.env.VITE_PYTHON_SERVICE_URL || 'http://localhost:8000';
+const API_BASE = 'https://full-back-1.onrender.com';
 
 interface Player {
   player_id: string;

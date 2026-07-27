@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import LoadingState from './LoadingState';
 import ErrorState from './ErrorState';
 
-const API_BASE = import.meta.env.VITE_PYTHON_SERVICE_URL || 'http://localhost:8000';
+const API_BASE = 'https://full-back-1.onrender.com';
 
 interface Team {
   id: string; name: string; code: string; flag: string;
