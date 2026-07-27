@@ -113,7 +113,6 @@ export default function App() {
 
   // Match & prediction states
   const [selectedMatchId, setSelectedMatchId] = useState<string>('M001'); // USA vs COL
-  const [predictionData, setPredictionData] = useState<any>(null);
   const [breakdownData, setBreakdownData] = useState<any>(null);
   const [highlightsData, setHighlightsData] = useState<Highlight[]>([]);
   const [matchDetail, setMatchDetail] = useState<MatchStats | null>(null);
@@ -549,24 +548,6 @@ export default function App() {
       if (!res.ok) throw new Error(`Failed to fetch clustering data: ${res.statusText}`);
       const data = await res.json();
       setPlayerClusterData(data);
-    } catch (e: any) {
-      setToolError(prev => ({ ...prev, [path]: e?.message || 'Request failed' }));
-    } finally {
-      setToolLoading(prev => ({ ...prev, [path]: false }));
-    }
-  };
-
-  // Fetch prediction results
-  const fetchPrediction = async (matchId: string) => {
-    const path = `/predict/match/${matchId}`;
-    setToolLoading(prev => ({ ...prev, [path]: true }));
-    setToolError(prev => ({ ...prev, [path]: '' }));
-    setPredictionData(null);
-    try {
-      const res = await fetch(`${API_BASE}${path}`);
-      if (!res.ok) throw new Error(`Failed to fetch prediction data: ${res.statusText}`);
-      const data = await res.json();
-      setPredictionData(data);
     } catch (e: any) {
       setToolError(prev => ({ ...prev, [path]: e?.message || 'Request failed' }));
     } finally {
