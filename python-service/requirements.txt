@@ -7,7 +7,7 @@ moviepy
 numpy
 scipy
 ultralytics
-opencv-python-headless
+opencv-python
 mplsoccer
 supervision
 feedparser
