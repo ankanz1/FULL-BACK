@@ -1221,38 +1221,29 @@ def _get_analyst_model():
 
 @app.get("/analyst/tactical")
 async def get_analyst_tactical():
-    """Runs the full tactical analyst pipeline (detect + track + homography + formation)."""
-    import tactical_analyst as ta
+    """Returns cached tactical analysis if available, otherwise returns a placeholder."""
     image_path = os.path.join(_SCRIPT_DIR, "public", "tactical_analyst.png")
     caption_path = os.path.join(_SCRIPT_DIR, "public", "tactical_analyst_caption.txt")
 
-    needs_run = True
     if os.path.exists(image_path) and os.path.exists(caption_path):
         age = time.time() - os.path.getmtime(image_path)
-        if age < 600:
-            needs_run = False
-
-    formations = {}
-    if needs_run:
-        try:
-            model = _get_analyst_model()
-            analyst = ta.TacticalAnalyst(model=model)
-            data = analyst.run()
-            if data is not None:
-                formations = {str(k): v for k, v in data["formations"].items()}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Analyst pipeline error: {e}")
-
-    caption = ""
-    if os.path.exists(caption_path):
-        with open(caption_path) as f:
-            caption = f.read().strip()
+        caption = ""
+        if os.path.exists(caption_path):
+            with open(caption_path) as f:
+                caption = f.read().strip()
+        if age < 3600:
+            return {
+                "type": "tactical_analyst",
+                "image_url": "/public/tactical_analyst.png",
+                "caption": caption or "Tactical analysis generated.",
+                "formations": {},
+            }
 
     return {
         "type": "tactical_analyst",
-        "image_url": "/public/tactical_analyst.png",
-        "caption": caption or "Tactical analysis generated.",
-        "formations": formations,
+        "image_url": None,
+        "caption": "Tactical analysis is temporarily unavailable on the demo server due to the high CPU requirements of real-time video processing. This feature requires a GPU-backed deployment.",
+        "formations": {},
     }
 
 @app.get("/predict/match")
