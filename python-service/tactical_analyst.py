@@ -14,7 +14,7 @@ HOMOGRAPHY_H_PATH = PUBLIC_DIR / "homography_H.npy"
 OUTPUT_IMAGE = PUBLIC_DIR / "tactical_analyst.png"
 CAPTION_PATH = PUBLIC_DIR / "tactical_analyst_caption.txt"
 
-FRAME_SKIP = 30
+FRAME_SKIP = 100
 CONF_THRESH = 0.35
 
 PITCH_LENGTH = 105.0
