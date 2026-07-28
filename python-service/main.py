@@ -1217,6 +1217,8 @@ def _get_analyst_model():
             _analyst_model = YOLO(os.path.join(_SCRIPT_DIR, "yolov8n.pt"))
     return _analyst_model
 
+
+
 @app.get("/analyst/tactical")
 async def get_analyst_tactical():
     """Runs the full tactical analyst pipeline (detect + track + homography + formation)."""
@@ -1232,11 +1234,14 @@ async def get_analyst_tactical():
 
     formations = {}
     if needs_run:
-        model = _get_analyst_model()
-        analyst = ta.TacticalAnalyst(model=model)
-        data = analyst.run()
-        if data is not None:
-            formations = {str(k): v for k, v in data["formations"].items()}
+        try:
+            model = _get_analyst_model()
+            analyst = ta.TacticalAnalyst(model=model)
+            data = analyst.run()
+            if data is not None:
+                formations = {str(k): v for k, v in data["formations"].items()}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Analyst pipeline error: {e}")
 
     caption = ""
     if os.path.exists(caption_path):
@@ -1267,8 +1272,11 @@ async def predict_tournament():
 
 @app.get("/predict/teams")
 async def predict_teams():
-    teams = prediction_model.get_all_teams()
-    return {"teams": teams}
+    try:
+        teams = prediction_model.get_all_teams()
+        return {"teams": teams}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 @app.get("/predict/elo/{team_name}")
 async def predict_team_elo(team_name: str):

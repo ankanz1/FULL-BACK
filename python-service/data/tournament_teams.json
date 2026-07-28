@@ -1,0 +1,27 @@
+{
+  "groups": {
+    "A": ["Argentina", "Mexico", "Nigeria", "Saudi Arabia"],
+    "B": ["France", "Netherlands", "Iran", "New Zealand"],
+    "C": ["Brazil", "Japan", "Poland", "Venezuela"],
+    "D": ["England", "Uruguay", "Tunisia", "Qatar"],
+    "E": ["Portugal", "Croatia", "Ecuador", "China"],
+    "F": ["Germany", "Denmark", "Algeria", "Panama"],
+    "G": ["Spain", "Senegal", "Serbia", "Canada"],
+    "H": ["Belgium", "Morocco", "Czech Republic", "Australia"],
+    "I": ["Italy", "South Korea", "Paraguay", "Egypt"],
+    "J": ["Colombia", "Switzerland", "Ukraine", "United States"],
+    "K": ["Turkey", "Sweden", "Ghana", "Iraq"],
+    "L": ["Norway", "Cameroon", "Ivory Coast", "Mali"]
+  },
+  "third_rank_cutoff": 8,
+  "knockout": {
+    "round_of_32": {
+      "description": "32 teams: 12 group winners + 12 runners-up + 8 best 3rd-placed"
+    },
+    "round_of_16": null,
+    "quarter_finals": null,
+    "semi_finals": null,
+    "bronze_final": null,
+    "final": null
+  }
+}

@@ -18,6 +18,8 @@ _elo_cache = None
 def load_elo() -> pd.DataFrame:
     global _elo_cache
     if _elo_cache is None:
+        if not os.path.exists(ELO_PATH):
+            raise FileNotFoundError(f"Elo ratings file not found: {ELO_PATH}. Run build_elo_ratings.py first.")
         _elo_cache = pd.read_csv(ELO_PATH)
     return _elo_cache
 
@@ -31,8 +33,11 @@ def get_team_rating(team_name: str) -> float | None:
     return float(row.iloc[0]["rating"])
 
 def get_all_teams() -> list[dict]:
-    df = load_elo()
-    return df.to_dict(orient="records")
+    try:
+        df = load_elo()
+        return df.to_dict(orient="records")
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Elo data unavailable: {e}")
 
 def expected_goals(rating: float, opponent: float, home_bonus: float = 0) -> float:
     diff = (rating + home_bonus) - opponent
