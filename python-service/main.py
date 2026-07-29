@@ -18,7 +18,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: Optional[List[ChatMessage]] = []
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(_SCRIPT_DIR, "data", "players_stats.csv")
@@ -1275,6 +1283,48 @@ async def predict_team_elo(team_name: str):
     if rating is None:
         raise HTTPException(status_code=404, detail=f"Team '{team_name}' not found")
     return {"team": team_name, "elo": rating}
+
+@app.post("/chat")
+async def chat_endpoint(req: ChatRequest):
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Gemini API key not configured")
+
+    system_prompt = (
+        "You are FULL BACK, an elite World Cup 2026 football analyst AI. "
+        "You have access to match data, player statistics, tactical analysis, Elo-based predictions, "
+        "and player clustering via K-Means archetypes. "
+        "Answer concisely and authoritatively. "
+        "Keep responses under 3-4 paragraphs. "
+        "Use markdown formatting when listing data. "
+        "You do not execute code or access live data — respond with knowledge and analysis only."
+    )
+
+    contents = [{"role": "user", "parts": [{"text": system_prompt}]}]
+    contents.append({"role": "model", "parts": [{"text": "Understood. I am FULL BACK. Standing by for tactical analysis and match data interrogations."}]})
+
+    for msg in req.history:
+        role = "model" if msg.role == "assistant" else "user"
+        contents.append({"role": role, "parts": [{"text": msg.content}]})
+
+    contents.append({"role": "user", "parts": [{"text": req.message}]})
+
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        payload = {"contents": contents}
+        res = requests.post(url, json=payload, timeout=30)
+        if res.status_code == 200:
+            res_data = res.json()
+            text = res_data["candidates"][0]["content"]["parts"][0]["text"]
+            return {"response": text}
+        else:
+            print(f"Gemini API error {res.status_code}: {res.text}")
+            raise HTTPException(status_code=502, detail="Gemini API returned an error")
+    except requests.Timeout:
+        raise HTTPException(status_code=504, detail="Gemini API timed out")
+    except Exception as e:
+        print(f"Chat error: {e}")
+        raise HTTPException(status_code=500, detail=f"Chat error: {e}")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

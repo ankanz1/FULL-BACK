@@ -528,15 +528,6 @@ export default function App() {
     }
   };
 
-  const authenticatedFetch = async (url: string): Promise<any> => {
-    const res = await fetch(url);
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Service returned error ${res.status}: ${text}`);
-    }
-    return await res.json();
-  };
-
   // Fetch clustering results
   const fetchClustering = async (playerId: string) => {
     const path = `/cluster/player/${playerId}`;
@@ -703,84 +694,27 @@ export default function App() {
     setChatLoading(true);
 
     try {
-      const cleanText = userText.toLowerCase();
-      let reply = '';
-      let path = '';
-      let toolName = '';
+      const history = messages.slice(-10).map(m => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        content: m.text
+      }));
 
-      if (cleanText.includes('cluster') || cleanText.includes('type of player') || cleanText.includes('similar to')) {
-        toolName = 'player_style_cluster';
-        const targetPlayer = players.find(p => cleanText.includes(p.name.toLowerCase())) || players[0];
-        path = `/cluster/player/${targetPlayer.player_id}`;
-      } else if (cleanText.includes('breakdown') || cleanText.includes('tactical') || cleanText.includes('tactics')) {
-        toolName = 'tactical_breakdown';
-        path = `/tactical/match/${selectedMatchId}`;
-      } else       if (cleanText.includes('highlight') || cleanText.includes('video') || cleanText.includes('clip')) {
-        toolName = 'generate_highlights';
-        path = `/highlights/match/${selectedMatchId}`;
-      } else if (cleanText.includes('snapshot') || cleanText.includes('tactical image') || cleanText.includes('position map') || (cleanText.includes('player') && cleanText.includes('position'))) {
-        toolName = 'tactical_snapshot';
-        path = `/tactics/snapshot`;
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userText, history })
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        setMessages(prev => [...prev, { sender: 'system', text: `CHAT_ERROR :: ${res.status}\n${errText}` }]);
+        return;
       }
 
-      if (toolName) {
-        setMessages(prev => [...prev, {
-          sender: 'system',
-          text: `INVOKING_TOOL: ${toolName}()`
-        }]);
-
-        try {
-          const result = await authenticatedFetch(`${API_BASE}${path}`);
-          reply = `MCP_TOOL_EXECUTION :: SUCCESS\n\n`;
-          if (toolName === 'player_style_cluster') {
-            reply += `Player Similarity Report for **${result.player.name}**:\n`;
-            reply += `- Archetype: ${result.player.archetype}\n`;
-            reply += `- Silhouette Confidence: ${result.silhouette_score.toFixed(3)}\n\n`;
-            reply += `Nearest Similar Players:\n`;
-            result.similar_players.forEach((p: any) => {
-              reply += `• ${p.name} (${p.position}) — Value: €${p.market_value_m}M (Dist: ${p.similarity_distance.toFixed(2)})\n`;
-            });
-          } else if (toolName === 'tactical_breakdown') {
-            reply += `Tactical Breakdown:\n${result.tactical_breakdown}`;
-          } else if (toolName === 'generate_highlights') {
-            reply += `Highlights generation successful. Found ${result.highlights.length} events inside the audio telemetry.`;
-          } else if (toolName === 'tactical_snapshot') {
-            const caption = result.caption || "Tactical snapshot generated.";
-            const imageUrl = `${API_BASE}${result.image_url}`;
-            setMessages(prev => [...prev, { sender: 'assistant', text: caption, imageUrl }]);
-            return;
-          }
-
-          setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
-        } catch (err: any) {
-          setMessages(prev => [...prev, { sender: 'system', text: `MCP_TOOL_EXECUTION :: FAILED\nReason: ${err.message}` }]);
-        }
-      } else {
-          if (cleanText.includes('hello') || cleanText.includes('hi')) {
-          reply = "HELLO. STANDING BY FOR World Cup telemetry analysis. Ask about player clustering, tactical breakdowns, or match data.";
-        } else if (cleanText.includes('match') || cleanText.includes('fixture') || cleanText.includes('score')) {
-          if (matches.length > 0) {
-            const recent = [...matches].sort((a, b) => ((b.date||'') > (a.date||'') ? 1 : -1)).slice(0, 5);
-            reply = recent.map(m => `Match ${m.match_id}: ${m.home_team.name} ${m.score.home} - ${m.score.away} ${m.away_team.name} (${m.status})`).join('\n');
-            reply += "\n\nAsk 'tactical breakdown' to invoke AI tools.";
-          } else {
-            reply = "Fetching match data... try asking for 'standings' or browse the Dashboard tab.";
-          }
-        } else if (cleanText.includes('standing') || cleanText.includes('group')) {
-          if (standings.length > 0) {
-            reply = standings.map((s: any) => `${s.position}. ${s.team.name} - ${s.points} pts`).join('\n');
-          } else {
-            reply = "Standings data not loaded yet. Try the Dashboard tab.";
-          }
-        } else {
-          reply = "UNDERSTOOD. Try asking for 'player similarity to Erling Haaland', 'tactical breakdown', or 'match standings'.";
-        }
-        setTimeout(() => {
-          setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
-        }, 800);
-      }
-    } catch (e) {
-      console.error(e);
+      const data = await res.json();
+      setMessages(prev => [...prev, { sender: 'assistant', text: data.response }]);
+    } catch (err: any) {
+      setMessages(prev => [...prev, { sender: 'system', text: `CONNECTION_ERROR :: ${err.message}` }]);
     } finally {
       setChatLoading(false);
     }
