@@ -1300,28 +1300,35 @@ async def chat_endpoint(req: ChatRequest):
         "You do not execute code or access live data — respond with knowledge and analysis only."
     )
 
-    contents = [{"role": "user", "parts": [{"text": system_prompt}]}]
-    contents.append({"role": "model", "parts": [{"text": "Understood. I am FULL BACK. Standing by for tactical analysis and match data interrogations."}]})
-
+    contents = []
     for msg in req.history:
         role = "model" if msg.role == "assistant" else "user"
         contents.append({"role": role, "parts": [{"text": msg.content}]})
-
     contents.append({"role": "user", "parts": [{"text": req.message}]})
 
     try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-        payload = {"contents": contents}
+        payload = {
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": contents
+        }
         res = requests.post(url, json=payload, timeout=30)
         if res.status_code == 200:
             res_data = res.json()
             text = res_data["candidates"][0]["content"]["parts"][0]["text"]
             return {"response": text}
         else:
-            print(f"Gemini API error {res.status_code}: {res.text}")
-            raise HTTPException(status_code=502, detail="Gemini API returned an error")
+            detail = f"Gemini API returned status {res.status_code}"
+            try:
+                detail += f": {res.json()}"
+            except Exception:
+                detail += f": {res.text[:200]}"
+            print(f"Chat error: {detail}")
+            raise HTTPException(status_code=502, detail=detail)
     except requests.Timeout:
         raise HTTPException(status_code=504, detail="Gemini API timed out")
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=f"Chat error: {e}")
