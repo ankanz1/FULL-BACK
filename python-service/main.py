@@ -1307,7 +1307,7 @@ async def chat_endpoint(req: ChatRequest):
     contents.append({"role": "user", "parts": [{"text": req.message}]})
 
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
         payload = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": contents
@@ -1317,6 +1317,8 @@ async def chat_endpoint(req: ChatRequest):
             res_data = res.json()
             text = res_data["candidates"][0]["content"]["parts"][0]["text"]
             return {"response": text}
+        elif res.status_code == 429:
+            return {"response": "FULL BACK's Gemini API quota is currently exhausted. Please try again later or upgrade the API plan. In the meantime, try using the prediction and tactical breakdown features — they work independently of the chat."}
         else:
             detail = f"Gemini API returned status {res.status_code}"
             try:
@@ -1324,14 +1326,12 @@ async def chat_endpoint(req: ChatRequest):
             except Exception:
                 detail += f": {res.text[:200]}"
             print(f"Chat error: {detail}")
-            raise HTTPException(status_code=502, detail=detail)
+            return {"response": f"FULL BACK chat is temporarily unavailable (API error {res.status_code}). Please try again later."}
     except requests.Timeout:
-        raise HTTPException(status_code=504, detail="Gemini API timed out")
-    except HTTPException:
-        raise
+        return {"response": "FULL BACK's Gemini API timed out. Please try again with a shorter question."}
     except Exception as e:
         print(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail=f"Chat error: {e}")
+        return {"response": "FULL BACK encountered an internal error. Please try again later."}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
