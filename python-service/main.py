@@ -1,4 +1,5 @@
 import os
+import asyncio
 
 # Load environment variables from root .env if it exists
 def load_env():
