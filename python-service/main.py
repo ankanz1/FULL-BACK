@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+import threading
 
 class ChatMessage(BaseModel):
     role: str
@@ -33,11 +34,17 @@ CSV_PATH = os.path.join(_SCRIPT_DIR, "data", "players_stats.csv")
 
 processed_data: Dict[str, Any] = {}
 _data_ready = False
+_clustering_started = False
+_clustering_lock = threading.Lock()
 
 def process_clustering():
-    global _data_ready
+    global _data_ready, _clustering_started
     if _data_ready:
         return
+    with _clustering_lock:
+        if _clustering_started:
+            return
+        _clustering_started = True
     if not os.path.exists(CSV_PATH):
         print(f"Player stats dataset not found at {CSV_PATH}")
         return
@@ -144,6 +151,9 @@ async def lifespan(app: FastAPI):
         print("Analyst model pre-warmed at startup")
     except Exception as e:
         print(f"Analyst model pre-warm failed (will lazy-load): {e}")
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, process_clustering)
+    print("Clustering started in background")
     yield
 
 app = FastAPI(title="FULL BACK Data Science Service", version="1.0.0", lifespan=lifespan)
@@ -974,7 +984,7 @@ async def get_standings(group: str):
     """Get group standings — fetches live from football-data.org WC competition"""
     group = group.upper()
     try:
-        raw = get_wc_standings()
+        raw = await get_wc_standings()
         if "error" not in raw:
             result = extract_standings_for_group(raw, group)
             if result:
@@ -994,7 +1004,7 @@ async def get_standings(group: str):
 async def get_all_matches():
     """Get all matches (fixtures) — fetches live from football-data.org WC competition"""
     try:
-        raw = get_wc_matches()
+        raw = await get_wc_matches()
         if "error" not in raw:
             extracted = extract_matches(raw)
             if extracted:
@@ -1012,7 +1022,7 @@ async def get_match(match_id: str):
         return match
 
     try:
-        raw = get_wc_matches()
+        raw = await get_wc_matches()
         if "error" not in raw:
             extracted = extract_matches(raw)
             for m in extracted:
@@ -1036,7 +1046,7 @@ async def get_team_form(team_id: str):
             fd_id = WC_TEAM_IDS.get(mapped)
     if fd_id:
         try:
-            raw = get_team_matches(fd_id)
+            raw = await get_team_matches(fd_id)
             if "error" not in raw:
                 form = extract_team_form(raw, fd_id)
                 if form:
@@ -1110,7 +1120,7 @@ async def get_wc_stats():
     if WC_STATS_CACHE["data"] and (now - WC_STATS_CACHE["fetched_at"]) < WC_STATS_CACHE_TTL:
         return WC_STATS_CACHE["data"]
     try:
-        raw = get_wc_scorers(40)
+        raw = await get_wc_scorers(40)
         if "error" not in raw and raw.get("scorers"):
             scorers = raw["scorers"]
             top_scorers = []
@@ -1180,37 +1190,27 @@ def _get_snapshot_model():
 
 @app.get("/tactics/snapshot")
 async def get_tactical_snapshot():
-    """Run or retrieve an existing tactical snapshot (player zones)."""
-    import tactical_snapshot as ts
+    """Return cached tactical snapshot if available, otherwise placeholder."""
     image_path = os.path.join(_SCRIPT_DIR, "public", "tactical_snapshot.png")
     caption_path = os.path.join(_SCRIPT_DIR, "public", "tactical_snapshot_caption.txt")
 
-    needs_run = True
     if os.path.exists(image_path) and os.path.exists(caption_path):
         age = time.time() - os.path.getmtime(image_path)
-        if age < 600:
-            needs_run = False
-
-    if needs_run:
-        model = _get_snapshot_model()
-        data = ts.process_video(model=model)
-        if data is None:
-            caption = "Pipeline could not detect any players."
-            with open(caption_path, "w") as f:
-                f.write(caption)
-        else:
-            ts.render_zones(data)
-            ts.generate_caption(data)
-
-    caption = ""
-    if os.path.exists(caption_path):
-        with open(caption_path) as f:
-            caption = f.read().strip()
+        if age < 3600:
+            caption = ""
+            if os.path.exists(caption_path):
+                with open(caption_path) as f:
+                    caption = f.read().strip()
+            return {
+                "type": "tactical_snapshot",
+                "image_url": "/public/tactical_snapshot.png",
+                "caption": caption or "Tactical snapshot generated."
+            }
 
     return {
         "type": "tactical_snapshot",
-        "image_url": "/public/tactical_snapshot.png",
-        "caption": caption or "Tactical snapshot generated."
+        "image_url": None,
+        "caption": "Tactical snapshot unavailable — video processing requires a GPU-backed deployment."
     }
 
 _analyst_model = None

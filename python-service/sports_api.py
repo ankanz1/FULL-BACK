@@ -10,10 +10,10 @@ Handles:
 
 import os
 import time
+import asyncio
 import json
 import logging
 from typing import Optional, Any
-from functools import wraps
 
 import requests
 
@@ -21,24 +21,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sports_api")
 
 API_BASE = "https://api.football-data.org/v4"
-WC_COMPETITION = "WC"  # football-data.org code for FIFA World Cup
+WC_COMPETITION = "WC"
 
-MIN_REQ_INTERVAL = 7.5  # seconds between requests (~8 req/min max)
+MIN_REQ_INTERVAL = 7.5
 
-# ── Rate limiter ──────────────────────────────────────────────────────────
 _last_req_time: float = 0.0
 
-def _rate_limit():
+async def _rate_limit():
     global _last_req_time
     now = time.time()
     elapsed = now - _last_req_time
     if elapsed < MIN_REQ_INTERVAL:
         sleep_for = MIN_REQ_INTERVAL - elapsed
         logger.info(f"Rate limiter: sleeping {sleep_for:.1f}s")
-        time.sleep(sleep_for)
+        await asyncio.sleep(sleep_for)
     _last_req_time = time.time()
 
-# ── Cache ─────────────────────────────────────────────────────────────────
 _cache: dict[str, tuple[float, Any]] = {}
 CACHE_TTL = {
     "standings": 60,
@@ -58,19 +56,18 @@ def _cached(key: str, ttl_key: str = "matches") -> Optional[Any]:
 def _set_cache(key: str, data: Any):
     _cache[key] = (time.time(), data)
 
-# ── Authenticated request ─────────────────────────────────────────────────
-def _api_get(path: str) -> dict:
+async def _api_get(path: str) -> dict:
     api_key = os.getenv("FOOTBALL_DATA_API_KEY")
     if not api_key:
         logger.warning("FOOTBALL_DATA_API_KEY not set, skipping API call")
         return {"error": "API key not configured"}
 
-    _rate_limit()
+    await _rate_limit()
     url = f"{API_BASE}{path}"
     headers = {"X-Auth-Token": api_key}
 
     try:
-        r = requests.get(url, headers=headers, timeout=10)
+        r = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
         logger.info(f"GET {path} -> HTTP {r.status_code}")
 
         if r.status_code == 200:
@@ -80,11 +77,8 @@ def _api_get(path: str) -> dict:
         logger.error(f"API error {r.status_code} for {path}: {body}")
 
         if r.status_code == 429:
-            logger.error("RATE LIMITED. Waiting 60s...")
-            time.sleep(60)
-            r = requests.get(url, headers=headers, timeout=10)
-            if r.status_code == 200:
-                return r.json()
+            logger.error("RATE LIMITED. Returning fallback immediately.")
+            return {"error": "rate_limited", "detail": body, "path": path}
 
         return {"error": f"HTTP {r.status_code}", "detail": body, "path": path}
     except requests.exceptions.Timeout:
@@ -97,53 +91,52 @@ def _api_get(path: str) -> dict:
         logger.error(f"Unexpected error fetching {path}: {e}")
         return {"error": str(e), "path": path}
 
-# ── Public API ────────────────────────────────────────────────────────────
-def get_wc_info() -> dict:
+async def get_wc_info() -> dict:
     cache_key = "wc_info"
     cached = _cached(cache_key, "competition")
     if cached:
         return cached
-    data = _api_get(f"/competitions/{WC_COMPETITION}")
+    data = await _api_get(f"/competitions/{WC_COMPETITION}")
     if "error" not in data:
         _set_cache(cache_key, data)
     return data
 
-def get_wc_standings() -> list[dict]:
+async def get_wc_standings():
     cache_key = "wc_standings"
     cached = _cached(cache_key, "standings")
     if cached:
         return cached
-    data = _api_get(f"/competitions/{WC_COMPETITION}/standings")
+    data = await _api_get(f"/competitions/{WC_COMPETITION}/standings")
     if "error" not in data:
         _set_cache(cache_key, data)
     return data
 
-def get_wc_matches() -> list[dict]:
+async def get_wc_matches():
     cache_key = "wc_matches"
     cached = _cached(cache_key, "matches")
     if cached:
         return cached
-    data = _api_get(f"/competitions/{WC_COMPETITION}/matches")
+    data = await _api_get(f"/competitions/{WC_COMPETITION}/matches")
     if "error" not in data:
         _set_cache(cache_key, data)
     return data
 
-def get_wc_scorers(limit: int = 40) -> dict:
+async def get_wc_scorers(limit: int = 40) -> dict:
     cache_key = f"wc_scorers_{limit}"
     cached = _cached(cache_key, "matches")
     if cached:
         return cached
-    data = _api_get(f"/competitions/{WC_COMPETITION}/scorers?limit={limit}")
+    data = await _api_get(f"/competitions/{WC_COMPETITION}/scorers?limit={limit}")
     if "error" not in data:
         _set_cache(cache_key, data)
     return data
 
-def get_team_matches(team_id: int) -> dict:
+async def get_team_matches(team_id: int) -> dict:
     cache_key = f"team_matches_{team_id}"
     cached = _cached(cache_key, "team_matches")
     if cached:
         return cached
-    data = _api_get(f"/teams/{team_id}/matches?status=FINISHED&limit=10")
+    data = await _api_get(f"/teams/{team_id}/matches?status=FINISHED&limit=10")
     if "error" not in data:
         _set_cache(cache_key, data)
     return data
