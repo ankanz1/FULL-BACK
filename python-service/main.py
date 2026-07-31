@@ -1,6 +1,4 @@
 import os
-import asyncio
-
 # Load environment variables from root .env if it exists
 def load_env():
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
@@ -35,17 +33,12 @@ CSV_PATH = os.path.join(_SCRIPT_DIR, "data", "players_stats.csv")
 
 processed_data: Dict[str, Any] = {}
 _data_ready = False
-_clustering_started = False
-_clustering_lock = threading.Lock()
+_clustering_running = False
 
 def process_clustering():
-    global _data_ready, _clustering_started
+    global _data_ready
     if _data_ready:
         return
-    with _clustering_lock:
-        if _clustering_started:
-            return
-        _clustering_started = True
     if not os.path.exists(CSV_PATH):
         print(f"Player stats dataset not found at {CSV_PATH}")
         return
@@ -59,6 +52,9 @@ def process_clustering():
 
     df = pd.read_csv(CSV_PATH)
     df = df[df["position"] != "Goalkeeper"].copy()
+    # Sample heavily to fit Render's 512MB free tier
+    if len(df) > 3000:
+        df = df.sample(n=3000, random_state=42)
     df["player_id"] = df["player_id"].apply(lambda x: f"PL{int(x):06d}")
 
     for col in ["goals_per_90", "assists_per_90", "key_passes", "tackles", "interceptions"]:
@@ -81,9 +77,9 @@ def process_clustering():
     X_scaled = scaler.fit_transform(df[features])
 
     best_k, best_score = 5, -1
-    print("Searching optimal K (3..7)...")
-    for k in range(3, 8):
-        km = KMeans(n_clusters=k, random_state=42, n_init=5)
+    print("Searching optimal K (3..5)...")
+    for k in range(3, 6):
+        km = KMeans(n_clusters=k, random_state=42, n_init=3)
         labels = km.fit_predict(X_scaled)
         s = silhouette_score(X_scaled, labels)
         print(f"  K={k}: silhouette={s:.4f}")
@@ -92,7 +88,7 @@ def process_clustering():
 
     sil_score = best_score
     print(f"Best K={best_k} (silhouette={sil_score:.4f}). Fitting final model...")
-    kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+    kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=5)
     labels = kmeans.fit_predict(X_scaled)
     df["cluster"] = labels
 
@@ -147,14 +143,6 @@ def process_clustering():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        _get_analyst_model()
-        print("Analyst model pre-warmed at startup")
-    except Exception as e:
-        print(f"Analyst model pre-warm failed (will lazy-load): {e}")
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, process_clustering)
-    print("Clustering started in background")
     yield
 
 app = FastAPI(title="FULL BACK Data Science Service", version="1.0.0", lifespan=lifespan)
@@ -188,10 +176,15 @@ os.makedirs("public/highlights", exist_ok=True)
 app.mount("/public", StaticFiles(directory="public"), name="public")
 
 def ensure_data():
+    global _clustering_running
+    if _data_ready:
+        return
+    if not _clustering_running:
+        _clustering_running = True
+        t = threading.Thread(target=process_clustering, daemon=True)
+        t.start()
     if not _data_ready:
-        process_clustering()
-    if "df" not in processed_data:
-        raise HTTPException(status_code=503, detail="Data not yet loaded")
+        raise HTTPException(status_code=503, detail="Clustering in progress (~15s), try again shortly")
 
 # Helper to call Gemini API
 def call_gemini_api(prompt: str) -> str:
