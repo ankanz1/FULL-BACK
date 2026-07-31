@@ -157,6 +157,7 @@ app.add_middleware(
 )
 
 import json, time, sys
+import numpy as np
 import requests
 from fastapi.staticfiles import StaticFiles
 import prediction_model
