@@ -55,6 +55,7 @@ def process_clustering():
     # Sample heavily to fit Render's 512MB free tier
     if len(df) > 3000:
         df = df.sample(n=3000, random_state=42)
+    df = df.reset_index(drop=True)
     df["player_id"] = df["player_id"].apply(lambda x: f"PL{int(x):06d}")
 
     for col in ["goals_per_90", "assists_per_90", "key_passes", "tackles", "interceptions"]:

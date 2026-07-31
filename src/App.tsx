@@ -1345,11 +1345,17 @@ export default function App() {
                     <ErrorState message={analystError} onRetry={fetchAnalystTactical} />
                   ) : analystData ? (
                     <div className="space-y-4">
-                      <img
-                        src={`${API_BASE}${analystData.image_url}`}
-                        alt="Tactical Analysis"
-                        className="w-full rounded border border-[#2A2A28]"
-                      />
+                      {analystData.image_url ? (
+                        <img
+                          src={`${API_BASE}${analystData.image_url}`}
+                          alt="Tactical Analysis"
+                          className="w-full rounded border border-[#2A2A28]"
+                        />
+                      ) : (
+                        <div className="border border-[#2A2A28] bg-black/20 rounded p-6 text-[0.75rem] text-neutral-400">
+                          Tactical visualization requires a GPU-backed deployment and is unavailable on this server.
+                        </div>
+                      )}
                       <div className="space-y-2">
                         {analystData.formations && Object.entries(analystData.formations).map(([team, formation]) => (
                           <div key={team} className="flex items-center gap-3 text-[0.75rem] mono">
