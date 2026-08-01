@@ -737,6 +737,7 @@ async def get_player_cluster(player_id: str):
 
     player_idx = player_rows.index[0]
     player_data = player_rows.iloc[0].to_dict()
+    player_data = {k: (None if v != v else v) for k, v in player_data.items()}
     
     target_vec = X_scaled[player_idx]
     distances = np.linalg.norm(X_scaled - target_vec, axis=1)
